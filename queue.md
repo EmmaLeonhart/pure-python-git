@@ -3,19 +3,30 @@
 Delete-only: a finished item is removed from here and logged in `devlog.md`
 in the same commit.
 
-## Stage 2: the index (continued)
+## Stage 3: branches, tags, checkout/switch, diff
 
-1. Myers diff and `--stat`-style counts, pulled forward from stage 3:
-   `commit` prints a summary (`N files changed, X insertions(+)`, `create
-   mode` lines) that needs line counts. Plan change recorded here on
-   2026-10-06: the diff engine is built now, the `diff` command stays in
-   stage 3.
-2. `commit` (`-m`, `-F`, `-a`, `-q`, `--allow-empty`, `--amend`, root
-   commits), HEAD and reflog update, message cleanup, output byte-identical
-   to git (`[branch (root-commit) id] subject` plus the summary); "nothing
-   to commit" prints status and exits 1.
-3. `log` (default format, `--oneline`, `--format`/`--pretty` placeholders,
-   `-n`, `--reverse`, revision ranges `a..b`), matching git for linear and
-   merge histories.
-4. Interop tests: git commits on a pygit-built index and the other way round;
-   `git fsck` and `git status` clean. README design section for stage 2.
+1. `diff`: work tree vs index (default), `--cached`/`--staged` (index vs
+   HEAD or a commit), `<commit>` (work tree vs commit), `<a> <b>` and
+   `a..b` (commit vs commit). Headers byte-identical to git: `diff --git`,
+   `index` (abbreviated ids and mode), new/deleted file mode, old/new mode,
+   similarity index and rename from/to, `Binary files ... differ`,
+   `\ No newline at end of file`. Options: `-U<n>`, `--stat`, `--numstat`,
+   `--shortstat`, `--name-only`, `--name-status`, `--no-renames`,
+   `--quiet`/`--exit-code`, pathspecs.
+2. `branch`: list (current marked `*`, `-v`, `-a`, `-r`), create (at HEAD or
+   a start point), `-d`/`-D` (with the "not fully merged" check), `-m`/`-M`,
+   `--set-upstream-to`, `--unset-upstream`, `--show-current`; messages
+   identical to git.
+3. `tag`: list (with `-l` patterns), lightweight, annotated (`-a -m`,
+   `-F`), `-d`, `-f`, `-n` output.
+4. Two-tree checkout engine: move the work tree and index from one commit
+   to another, refusing when local changes would be overwritten (git's
+   messages), keeping unrelated local changes, removing emptied
+   directories.
+5. `switch` and `checkout` (branch, `-b`/`-c`, `-B`, `--detach`, a commit
+   with git's detached-HEAD advice, `checkout [<rev>] -- <paths>`), reflog
+   messages `checkout: moving from X to Y`, "Switched to ..." and tracking
+   output.
+6. `reset` (`--soft`, `--mixed`, `--hard`, `reset -- paths`), needed by
+   stage 4's `merge --abort` and by tests; `ORIG_HEAD`.
+7. README design section for stage 3; tests for every command against git.

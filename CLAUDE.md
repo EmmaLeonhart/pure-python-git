@@ -2,6 +2,29 @@
 
 > A cleanvibe project: an open-ended, git-tracked working session.
 
+## This project: pure-python-git
+A git implementation in pure Python, standard library only (`pygit/`, run as
+`python -m pygit <cmd>`), built in the five stages of `data_lake/brief.md`.
+GitHub: `EmmaLeonhart/pure-python-git` (private). Plan: `queue.md` (current
+stage) and `todo.md` (later stages); history: `devlog.md`.
+
+Conventions learned the hard way:
+- **Every output is bytes.** Write through `cli.out()` / `cli.err()`, never
+  `print` or `sys.stdout.write`: on Windows text mode turns `\n` into `\r\n`.
+- **Files git reads are written in binary.** `os.open` needs `O_BINARY` on
+  Windows (use `lockfile.write_locked`); `write_text` needs `newline="\n"`.
+- **Git for Windows stores dev/ino/uid/gid as 0** in the index; `IndexEntry.set_stat`
+  does the same, or git sees every file as modified.
+- **Tests compare with the real git**: `tests/gitcompat.py` (isolated HOME,
+  fixed identities and dates). `assertSame` runs both tools in one repo;
+  `TwinTestCase.step` runs them in twin repos for commands that change
+  history. Run `python -m unittest discover -s tests` before every push:
+  GitHub Actions is blocked on billing (see INTENT.md).
+- **Port, don't approximate**, where git's exact output depends on an
+  algorithm (xdiff, wildmatch): the ports follow git's C source line by line.
+- Edit files with the file tools; shell heredocs in this environment mangle
+  backslash escapes.
+
 ## How this project works
 Nothing was decided up front about what this project is. cleanvibe projects are
 built to **work from low information**: the user may say a lot, a little, or

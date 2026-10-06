@@ -15,8 +15,8 @@ Work in progress, built in five stages:
 | Stage | Scope | Status |
 |---|---|---|
 | 1 | Object store: blobs, trees, commits, tags, loose objects, refs, HEAD; `hash-object`, `cat-file`, `ls-tree`, `rev-parse` | done |
-| 2 | Index v2; `add`, `rm`, `status`, `commit`, `log`; `.gitignore` | next |
-| 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | planned |
+| 2 | Index v2; `add`, `rm`, `status`, `commit`, `log`; `.gitignore` | done |
+| 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | next (the diff engine is already done) |
 | 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | planned |
 | 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | planned |
 
@@ -35,11 +35,23 @@ The tests use the standard library's `unittest` and compare against the real
 python -m unittest discover -s tests -v
 ```
 
+Most tests run a command with both tools and require identical stdout,
+stderr and exit code. Commands that change history run in twin repositories
+given identical setup, and the resulting commit ids must match too. The diff
+engine is also checked against `git diff --no-index` on random inputs.
+
 ## Commands so far
 
-`init`, `hash-object`, `cat-file`, `ls-tree`, `rev-parse`, and the plumbing
-the tests use to build history without the index: `mktree`, `commit-tree`,
-`update-ref`, `symbolic-ref`.
+- Stage 1: `init`, `hash-object`, `cat-file`, `ls-tree`, `rev-parse`, and
+  the plumbing used to build history without the index: `mktree`,
+  `commit-tree`, `update-ref`, `symbolic-ref`.
+- Stage 2: `add`, `rm`, `status` (long, `-s`, `--porcelain[ -z]`, `-b`,
+  `-u`, `--ignored`), `commit` (`-m`, `-F`, `-a`, `--amend`,
+  `--allow-empty`, `--author`, `--date`, `--cleanup`), `log` (medium,
+  oneline, short, full, fuller, raw, `--format` placeholders, `-n`,
+  `--reverse`, `--first-parent`, ranges `a..b`, `a...b`, `^a`, `-- paths`),
+  plus `ls-files`, `write-tree`, `read-tree`, `update-index`,
+  `check-ignore`.
 
 ## Design and limits
 
@@ -56,10 +68,26 @@ The package is layered so each stage builds on the one below:
   ref name lookup in git's order).
 - `pygit/config.py`: the config file format, with global/repository
   precedence.
+- `pygit/index.py`: the index file (reads versions 2 to 4, writes 2; the
+  optional extensions are dropped on write, and git rebuilds them).
+- `pygit/ignore.py`: a port of git's `wildmatch.c` and the `.gitignore`
+  precedence rules (per-directory files, `info/exclude`,
+  `core.excludesFile`; an excluded directory hides everything in it).
+- `pygit/worktree.py`, `pygit/status.py`: work tree scanning, stat-based
+  change detection with git's racy-clean check, untracked directory
+  collapsing.
+- `pygit/xdiff.py`: a port of git's xdiff (preprocessing, Myers with git's
+  cost heuristics, change compaction with the indent heuristic, hunk
+  emission). It produces the same hunks as git, not only a minimal diff.
+- `pygit/diffcore.py`, `pygit/treediff.py`: tree comparison and rename
+  detection; the diffstat summary `commit` prints.
+- `pygit/history.py`, `pygit/pretty.py`: history walks in git's order
+  (committer date, with path-limited simplification of merges) and commit
+  formatting.
 - `pygit/commands/`: the command-line layer. Output is written as bytes so
   it matches git on every platform (no `\r\n` on Windows).
 
-Limits in stage 1:
+Limits so far:
 
 - SHA-1 repositories only; the SHA-256 object format is not supported.
 - Packed objects can't be read yet, so repositories git has packed (after
@@ -69,6 +97,15 @@ Limits in stage 1:
 - Config `[include]` sections are not followed.
 - Content filters (`core.autocrlf`, `.gitattributes`) are not applied;
   file bytes are stored as they are.
+- `commit` never opens an editor (it needs `-m`, `-F`, `-C` or `--amend`),
+  runs no hooks, does not sign, and takes no pathspecs.
+- Rename similarity uses git's chunking idea but not its exact hash, so a
+  pair scoring right at the threshold may be paired differently than git
+  pairs it. Exact renames always match.
+- `log` has no `--graph`, decorations, `-p`/`--stat`, relative dates or
+  `--follow`; path limiting implements git's default simplification only.
+- Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
+  written.
 
 ## Working on it
 

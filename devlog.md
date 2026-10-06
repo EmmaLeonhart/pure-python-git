@@ -39,3 +39,16 @@ milestones.
   Windows records dev/ino/uid/gid as 0 and compares them, so pygit now does
   the same; long status paragraph spacing, `-uno` wording, `./` for the cwd
   itself, ignored-directory naming in `add`.
+- 02:48 PST: **stage 2 done: commit, log, and the diff engine.**
+  `pygit/xdiff.py` ports git's xdiff (record classification, trim and
+  cleanup of unmatched lines, Myers split with git's heuristics and cost
+  limit, change compaction with the indent heuristic, hunk grouping and
+  function-name context); it matches `git diff --no-index` on 430 random
+  file pairs, including large ones that hit the cost heuristics. It was
+  pulled forward from stage 3 because `commit`'s summary needs line
+  counts. `commit` matches git's output and commit ids (summary with
+  Author/Date lines, create/delete/rename/mode lines, "nothing to commit"
+  status with "Initial commit", the empty-amend refusal, reflog messages).
+  `log` covers the built-in formats, `--format` placeholders, ranges and
+  path limiting with git's merge simplification. 58 tests pass. Stage 3
+  is broken down in queue.md.

@@ -473,8 +473,14 @@ def branch_line(repo) -> bytes:
     return detached_description(repo) + b"\n"
 
 
-def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracked: bool = True) -> bytes:
-    """The default `git status` output."""
+def long_status(repo, st, prefix: bytes, hints: bool = True, show_untracked: bool = True,
+                from_commit: bool = False, amend: bool = False) -> bytes:
+    """The default `git status` output.
+
+    `from_commit`: the status `git commit` prints when there is nothing to
+    commit ("Initial commit" instead of "No commits yet"); `amend`: the
+    same when amending, which ends with "No changes".
+    """
     lines = []
     lines.append(branch_line(repo))
     born = head_commit(repo) is not None
@@ -490,14 +496,14 @@ def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracke
     from pygit.merging import merge_state_lines
     lines.extend(merge_state_lines(repo, st))
     if not born:
-        lines.append(b"\nNo commits yet\n\n")
+        lines.append(b"\nInitial commit\n\n" if from_commit else b"\nNo commits yet\n\n")
 
     def show(path: bytes) -> bytes:
         return quote_path(relative_to_cwd(path, prefix))
 
     if st.staged:
         lines.append(b"Changes to be committed:\n")
-        if not for_commit:
+        if hints:
             lines.append(b'  (use "git restore --staged <file>..." to unstage)\n' if born
                          else b'  (use "git rm --cached <file>..." to unstage)\n')
         for c in st.staged:
@@ -509,7 +515,7 @@ def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracke
         lines.append(b"\n")
     if st.unmerged:
         lines.append(b"Unmerged paths:\n")
-        if not for_commit:
+        if hints:
             lines.append(b'  (use "git restore --staged <file>..." to unstage)\n' if born
                          else b'  (use "git rm --cached <file>..." to unstage)\n')
             if any(code in ("DD", "AU", "UD", "UA", "DU") for _, code in st.unmerged):
@@ -521,7 +527,7 @@ def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracke
         lines.append(b"\n")
     if st.unstaged:
         lines.append(b"Changes not staged for commit:\n")
-        if not for_commit:
+        if hints:
             if any(c.status == "D" for c in st.unstaged):
                 lines.append(b'  (use "git add/rm <file>..." to update what will be committed)\n')
             else:
@@ -532,14 +538,14 @@ def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracke
         lines.append(b"\n")
     if st.untracked:
         lines.append(b"Untracked files:\n")
-        if not for_commit:
+        if hints:
             lines.append(b'  (use "git add <file>..." to include in what will be committed)\n')
         for path in st.untracked:
             lines.append(b"\t" + show(path) + b"\n")
         lines.append(b"\n")
     if st.ignored:
         lines.append(b"Ignored files:\n")
-        if not for_commit:
+        if hints:
             lines.append(b'  (use "git add -f <file>..." to include in what will be committed)\n')
         for path in st.ignored:
             lines.append(b"\t" + show(path) + b"\n")
@@ -547,7 +553,9 @@ def long_status(repo, st, prefix: bytes, for_commit: bool = False, show_untracke
     if not show_untracked and st.staged:
         lines.append(b"Untracked files not listed (use -u option to show untracked files)\n")
     if not st.staged:
-        if st.unstaged or st.unmerged:
+        if amend and not (st.unstaged or st.unmerged or st.untracked):
+            lines.append(b"No changes\n")
+        elif st.unstaged or st.unmerged:
             lines.append(b'no changes added to commit (use "git add" and/or "git commit -a")\n')
         elif st.untracked:
             lines.append(b'nothing added to commit but untracked files present (use "git add" to track)\n')
