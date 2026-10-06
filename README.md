@@ -57,7 +57,7 @@ tool writes are verified and indexed by the other.
   and per-commit diffs: `-p`, `--stat`, `--numstat`, `--shortstat`,
   `--name-only`, `--name-status`, `--summary`), `show` (commits, tags,
   trees, blobs), plus `ls-files`, `write-tree`, `read-tree`, `update-index`,
-  `check-ignore`.
+  `check-ignore`, `check-attr`.
 - Stage 3: `diff` (work tree, `--cached`, commits, `a..b`, `a...b`;
   patches, `--stat`, `--numstat`, `--shortstat`, `--name-only`,
   `--name-status`, `-U<n>`, `--exit-code`, `--quiet`, `-z`), `branch`
