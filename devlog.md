@@ -138,3 +138,13 @@ milestones.
   summary is empty. `show` handles commits (merges in combined mode:
   stats against the first parent, an empty patch for clean merges),
   annotated tags, trees and blobs. 95 tests pass.
+- 07:01 PST: **combined diffs.** `pygit/combined.py` ports git's
+  combine-diff.c (no-context diffs against each parent, lost lines
+  coalesced by LCS, dense hunk selection, `@@@` headers, git's
+  hunk-comment truncation). `diff` during a conflicted merge prints
+  `diff --cc` for paths with both sides first, then the other pairs;
+  stat-like formats list a conflicted path as `U` plus its stage-2
+  diff, as git does. `show` of a merge prints the combined patch for
+  paths that differ from every parent. 181 random conflicted merges were
+  identical to git in `diff` and in `show` of the committed result; 40
+  are kept in `tests/test_stage4_merge.py`. 97 tests pass.

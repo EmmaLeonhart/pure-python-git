@@ -90,6 +90,69 @@ class TestMergeFile(GitTestCase):
         self.assertEqual(p.returncode, g.returncode)
 
 
+class TestCombinedDiff(GitTestCase):
+    """`diff --cc` during conflicts and `show` of the resulting merges."""
+
+    VOCAB = TestMergeFile.VOCAB
+
+    def _mutate(self, rng, lines, edits=4):
+        return TestMergeFile._mutate(self, rng, lines)
+
+    def test_random_conflicts(self):
+        rng = random.Random(21)
+        checked = 0
+        for it in range(40):
+            repo = self.tmp / f"r{it}"
+            self.git("init", "-q", str(repo))
+            base = [rng.choice(self.VOCAB) for _ in range(rng.randint(3, 20))]
+
+            def put(lines):
+                self.write("f", b"\n".join(lines) + b"\n", base=repo)
+
+            put(base)
+            self.git("add", "f", cwd=repo)
+            self.git("commit", "-q", "-m", "base", cwd=repo)
+            self.git("checkout", "-q", "-b", "side", cwd=repo)
+            put(self._mutate(rng, base))
+            self.git("commit", "-q", "--allow-empty", "-am", "side", cwd=repo)
+            self.git("checkout", "-q", "main", cwd=repo)
+            put(self._mutate(rng, base))
+            self.git("commit", "-q", "--allow-empty", "-am", "main", cwd=repo)
+            if self.git("merge", "side", cwd=repo, check=False).returncode == 0:
+                continue
+            checked += 1
+            if rng.random() < 0.4:
+                put(self._mutate(rng, (repo / "f").read_bytes().split(b"\n")))
+            with self.subTest(it=it):
+                for args in (["diff"], ["diff", "--stat"], ["diff", "--name-status"], ["diff", "--cached"]):
+                    self.assertSame(*args, cwd=repo)
+                self.git("commit", "-q", "-am", "merged", cwd=repo)
+                self.assertSame("show", cwd=repo)
+                self.assertSame("show", "--stat", cwd=repo)
+        self.assertGreater(checked, 10)
+
+    def test_delete_conflicts(self):
+        self.git_init()
+        self.write("d", "del\n")
+        self.write("d2", "del2\n")
+        self.git("add", ".")
+        self.git("commit", "-q", "-m", "base")
+        self.git("checkout", "-q", "-b", "side")
+        self.write("d", "changed\n")
+        self.git("rm", "-q", "d2")
+        self.git("commit", "-q", "-am", "side")
+        self.git("checkout", "-q", "main")
+        self.git("rm", "-q", "d")
+        self.write("d2", "changed2\n")
+        self.git("commit", "-q", "-am", "main")
+        self.git("merge", "side", check=False)
+        for args in (["diff"], ["diff", "--stat"], ["diff", "--numstat"], ["diff", "--name-status"]):
+            with self.subTest(args=args):
+                self.assertSame(*args)
+        self.write("d2", "edited in the work tree\n")
+        self.assertSame("diff")
+
+
 class TestMerge(Stage3Twin):
     def setup_branches(self):
         self.write2("f", "1\n2\n3\n4\n5\n6\n7\n8\n9\n")

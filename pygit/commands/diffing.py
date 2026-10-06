@@ -185,12 +185,32 @@ def cmd_diff(args):
         old = {p: v for p, v in old.items() if p not in unmerged}
         new = {p: v for p, v in new.items() if p not in unmerged}
     pairs = diff_maps(repo.odb, old, new, renames=renames and not (not revs and not cached))
+    combined_out = []
     if unmerged:
         from pygit.treediff import FilePair
-        pairs += [FilePair("U", p, p) for p in unmerged]
-        pairs.sort(key=lambda x: x.path)
+        work_tree_diff = not revs and not cached
+        extra = []
+        for p in sorted(unmerged):
+            ours, theirs = idx.get(p, 2), idx.get(p, 3)
+            if work_tree_diff and fmt == "patch" and ours is not None and theirs is not None:
+                # Both sides present: a dense combined diff against them,
+                # printed before the other pairs as run_diff_files does.
+                combined_out.append(_combined_for_worktree(repo, p, ours, theirs))
+                continue
+            extra.append(FilePair("U", p, p))
+            if work_tree_diff and ours is not None:
+                # Also "ours" (stage 2) against the work tree.
+                wt = _worktree_map(repo, idx, {p}, contents, {p: (ours.mode, ours.oid)})
+                cur = wt.get(p)
+                if cur is None:
+                    extra.append(FilePair("D", p, None, ours.mode, 0, ours.oid, None))
+                elif cur != (ours.mode, ours.oid):
+                    extra.append(FilePair("M", p, p, ours.mode, cur[0], ours.oid, cur[1]))
+        # A path's "U" entry comes before its other entry (stable sort).
+        pairs = sorted(extra + pairs, key=lambda x: (x.path, x.status != "U"))
     if not quiet:
         if fmt == "patch":
+            out(b"".join(combined_out))
             out(diffout.patch(repo, pairs, contents, context, full_index=full_index))
         elif fmt == "stat":
             out(diffout.stat(pairs, contents, stat_width))
@@ -203,5 +223,19 @@ def cmd_diff(args):
         elif fmt == "name-status":
             out(diffout.name_status(pairs, z))
     if exit_code:
-        return 1 if pairs else 0
+        return 1 if pairs or combined_out else 0
     return 0
+
+
+def _combined_for_worktree(repo, path: bytes, ours, theirs) -> bytes:
+    from pygit.combined import combined_patch
+    st = worktree.lstat(repo, path)
+    if st is None:
+        mode, data = 0, b""
+    else:
+        filemode = repo.config.get_bool("core.fileMode", os.name != "nt")
+        mode = mode_from_stat(st, filemode, ours.mode)
+        data = worktree.read_worktree_blob(repo, path, st)
+    parents = [(ours.mode, ours.oid), (theirs.mode, theirs.oid)]
+    pdata = [repo.odb.read(ours.oid)[1], repo.odb.read(theirs.oid)[1]]
+    return combined_patch(repo, path, None, mode, data, parents, pdata, working_tree=True)

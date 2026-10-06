@@ -110,6 +110,9 @@ The package is layered so each stage builds on the one below:
   summary `commit` prints.
 - `pygit/diffout.py`: patch headers, `--stat` layout (git's width and
   scaling rules), numstat and name-status output.
+- `pygit/combined.py`: a port of git's `combine-diff.c` (`diff --cc`):
+  per-parent diffs, lost lines coalesced by LCS, dense hunk selection;
+  used by `diff` during a conflicted merge and by `show` of merges.
 - `pygit/checkout.py`: moving the index and work tree between trees with
   git's two-way rules (local changes carry over when a path is the same
   in both trees; a checkout that would lose a change or overwrite an
@@ -152,14 +155,13 @@ an approximation; random tests compare the results with git.
 - `commit` takes no pathspecs.
 - `log` has no `--graph`, decorations, relative dates or `--follow`; path
   limiting implements git's default simplification only.
-- `show` of a merge whose result differs from every parent (an "evil"
-  merge or a conflict resolution) does not print the combined patch.
 - Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
   written.
 - `diff` has no `--color`, word diff, `--relative`, `-M<n>` thresholds,
   copy detection or userdiff drivers (function context uses git's default
-  rule only). Unmerged paths show as `* Unmerged path`; there is no
-  combined diff (`diff --cc`).
+  rule only). Combined diffs are always dense (`--cc`); there is no
+  `--combined`/`-m`/`--diff-merges` choice, and `log` shows no diffs for
+  merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
   `--overlay` options; `restore`, `stash`, `rebase` and `cherry-pick` are
   not implemented.

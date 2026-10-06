@@ -399,16 +399,42 @@ class LogView:
             if not self.combined:
                 return None
             # Combined mode: the stat-like parts are against the first
-            # parent; the dense combined patch of a clean merge is empty
-            # (evil merges are not rendered: see README limits).
+            # parent; the patch is the dense combined diff of the paths
+            # that differ from every parent.
+            patch = self.combined_patch(c) if "patch" in formats else b""
             formats = [f for f in formats if f not in ("patch", "name-only", "name-status")]
             if not formats:
-                return None
+                return patch or None
+            old_tree = self.cache.get(c.parents[0]).tree
+            stat = render_diff(self.repo, tree_entries(self.repo.odb, old_tree),
+                               tree_entries(self.repo.odb, c.tree), formats, self.renames) or b""
+            return stat + (b"\n" if stat and patch else b"") + patch
         old_tree = self.cache.get(c.parents[0]).tree if c.parents else None
         return render_diff(self.repo, tree_entries(self.repo.odb, old_tree),
                            tree_entries(self.repo.odb, c.tree), formats, self.renames)
 
     combined = False  # show: merges get a (dense) combined diff
+
+    def combined_patch(self, c) -> bytes:
+        """diff_tree_combined: `diff --cc` for paths differing from all parents."""
+        from pygit.combined import combined_patch
+        odb = self.repo.odb
+        result = tree_entries(odb, c.tree)
+        parent_maps = [tree_entries(odb, self.cache.get(p).tree) for p in c.parents]
+        paths = set(result)
+        for m in parent_maps:
+            paths |= set(m)
+        out_parts = []
+        for path in sorted(paths):
+            r = result.get(path)
+            if all(m.get(path) != r for m in parent_maps):
+                parents = [m.get(path) or (0, None) for m in parent_maps]
+                pdata = [odb.read(o)[1] if o else b"" for _, o in parents]
+                rmode, roid = r if r else (0, None)
+                rdata = odb.read(roid)[1] if roid else b""
+                out_parts.append(combined_patch(self.repo, path, roid, rmode, rdata, parents, pdata,
+                                                working_tree=False))
+        return b"".join(out_parts)
 
     def entry(self, oid) -> bytes:
         head = self.header(oid)
