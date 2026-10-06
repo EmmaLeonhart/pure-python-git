@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/intent_staleness.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/intent_staleness.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/save_session_log.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/save_session_log.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/save_session_log.py\" --push || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/save_session_log.py\" --push"
+          }
+        ]
+      }
+    ]
+  }
+}

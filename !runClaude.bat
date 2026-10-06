@@ -1,0 +1,3 @@
+@echo off
+cd /d "%~dp0"
+claude "This is a new session in an existing cleanvibe project. Catch up before doing anything: read CLAUDE.md, INTENT.md and the newest session log in sessions/, and queue.md if there is one. If the Thirty-minute intake in CLAUDE.md has not run yet, schedule it again. If it has run but work mode has not started, the project is still in chat mode: stay conversational and schedule a Mode check for an hour from now. If the weekly cleanvibe update check in CLAUDE.md is due, run the cleanvibe-update-check skill. Then tell me briefly where things stand. If I reply, follow my lead; if I say nothing, carry on with the work already planned." --name velvet-vivid-otter --remote-control velvet-vivid-otter
