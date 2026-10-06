@@ -10,7 +10,7 @@ ids, `cat-file`, `ls-tree`, `diff`) matches it byte for byte.
 
 ## Status
 
-Work in progress, built in five stages:
+All five stages of the brief are implemented:
 
 | Stage | Scope | Status |
 |---|---|---|
@@ -18,13 +18,15 @@ Work in progress, built in five stages:
 | 2 | Index v2; `add`, `rm`, `status`, `commit`, `log`; `.gitignore` | done |
 | 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | done |
 | 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | done |
-| 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | next |
+| 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | done |
 
 ## Usage
 
 ```
 python -m pygit <command> [args]
 ```
+
+Requires Python 3.9 or later and nothing else.
 
 ## Tests
 
@@ -37,10 +39,12 @@ python -m unittest discover -s tests -v
 
 Most tests run a command with both tools and require identical stdout,
 stderr and exit code. Commands that change history run in twin repositories
-given identical setup, and the resulting commit ids must match too. The diff
-engine is also checked against `git diff --no-index` on random inputs.
+given identical setup; the resulting commit ids, index, files and status
+must match too. The diff and merge engines are also checked against
+`git diff --no-index` and `git merge-file` on random inputs, and packs each
+tool writes are verified and indexed by the other.
 
-## Commands so far
+## Commands
 
 - Stage 1: `init`, `hash-object`, `cat-file`, `ls-tree`, `rev-parse`, and
   the plumbing used to build history without the index: `mktree`,
@@ -64,8 +68,13 @@ engine is also checked against `git diff --no-index` on random inputs.
   (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
   commits, conflicts, `--abort`, `--continue`), with `status`, `diff` and
   `commit` aware of merges in progress.
+- Stage 5: `verify-pack`, `index-pack`, `pack-objects`, `count-objects`,
+  `pack-refs`, `prune`, `gc`, `clone` (`--bare`, `-b`, `-o`), `fetch`
+  (`--prune`, explicit refs), `push` (refspecs, `--force`/`+`, `--delete`,
+  `--tags`, `-u`), `pull` (fetch and merge, with git's divergent-branch
+  refusal), `remote` (list, `-v`, `add`, `remove`, `get-url`).
 
-## Design and limits
+## Design
 
 The package is layered so each stage builds on the one below:
 
@@ -73,7 +82,8 @@ The package is layered so each stage builds on the one below:
   objects written through a temp file and renamed into place, read-only like
   git's; parsers and serializers for trees, commits and tags. Commit and tag
   headers keep unknown fields (such as `gpgsig`) in order, so a parsed
-  object serializes back to the same bytes.
+  object serializes back to the same bytes. Packed objects are read
+  through `pygit/pack.py`.
 - `pygit/refs.py`: loose refs, `packed-refs`, symbolic refs, ref updates
   through `.lock` files, reflogs when `core.logAllRefUpdates` is on.
 - `pygit/revparse.py`: revision expressions (`HEAD~2^{tree}:path`, short ids,
@@ -108,42 +118,62 @@ The package is layered so each stage builds on the one below:
   content merged at the new path, rename/delete, rename/rename, mode
   changes, binary files, file/directory clashes), and recursive virtual
   merge bases for criss-cross histories.
+- `pygit/pack.py`: pack reading (v1/v2 indexes, OFS and REF deltas, a
+  cache of resolved bases) and writing (delta search over a window of 10
+  candidates sorted by type, name hash and size, chains up to depth 50,
+  16-byte block matching; v2 indexes, 64-bit offsets when needed).
+- `pygit/transport.py`: the local "wire": the other repository is opened
+  directly, refs are read, and the objects the receiver lacks (everything
+  reachable from the wanted tips but not from the receiver's refs) are
+  written into the receiver as one new pack.
 - `pygit/history.py`, `pygit/pretty.py`: history walks in git's order
   (committer date, with path-limited simplification of merges) and commit
   formatting.
 - `pygit/commands/`: the command-line layer. Output is written as bytes so
   it matches git on every platform (no `\r\n` on Windows).
 
-Limits so far:
+Where git's exact output depends on an algorithm (xdiff, xmerge,
+wildmatch), the code is a line-by-line port of git's C source rather than
+an approximation; random tests compare the results with git.
+
+## Limits
 
 - SHA-1 repositories only; the SHA-256 object format is not supported.
-- Packed objects can't be read yet, so repositories git has packed (after
-  `git gc` or a clone) fail until stage 5.
-- `ls-tree` paths are taken from the repository root, not the current
-  directory.
+- Content filters (`core.autocrlf`, `.gitattributes`, `filter`, `eol`) are
+  not applied; file bytes are stored as they are.
 - Config `[include]` sections are not followed.
-- Content filters (`core.autocrlf`, `.gitattributes`) are not applied;
-  file bytes are stored as they are.
-- `commit` never opens an editor (it needs `-m`, `-F`, `-C` or `--amend`),
-  runs no hooks, does not sign, and takes no pathspecs.
+- No editor, hooks, signing, pager or colour anywhere: `commit`, `tag -a`
+  and `merge` need their message on the command line or in a file.
+- `commit` takes no pathspecs.
 - Rename similarity uses git's chunking idea but not its exact hash, so a
-  pair scoring right at the threshold may be paired differently than git
-  pairs it. Exact renames always match.
+  pair scoring right at the 50% threshold may be paired differently than
+  git pairs it. Exact renames always match.
 - `log` has no `--graph`, decorations, `-p`/`--stat`, relative dates or
   `--follow`; path limiting implements git's default simplification only.
+- `ls-tree` paths are taken from the repository root, not the current
+  directory.
 - Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
   written.
 - `diff` has no `--color`, word diff, `--relative`, `-M<n>` thresholds,
   copy detection or userdiff drivers (function context uses git's default
-  rule only); unmerged entries are not shown yet.
+  rule only). Unmerged paths show as `* Unmerged path`; there is no
+  combined diff (`diff --cc`).
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
-  `--overlay` options; `restore` and `stash` are not implemented.
-- `merge` merges one branch at a time (no octopus), uses only the ort
-  strategy without options (`-X ours`, `-s recursive`, ...), and does not
-  sign, run hooks or open an editor. Unusual conflicts (distinct types,
+  `--overlay` options; `restore`, `stash`, `rebase` and `cherry-pick` are
+  not implemented.
+- `merge` merges one branch at a time (no octopus) with the ort strategy
+  only and no `-X` options. Unusual conflicts (distinct types,
   rename/rename(2to1), directory renames) are reported but not resolved
-  the way ort resolves them. `git diff` shows unmerged paths as
-  `* Unmerged path` but has no combined diff (`diff --cc`).
+  the way ort resolves them.
+- Packs pygit writes are valid but not byte-identical to git's (git's
+  delta search, object order heuristics and compression differ); no
+  `.rev`, bitmap or multi-pack index files are written; thin packs are not
+  accepted by `index-pack`.
+- `gc` always repacks everything into one pack; there is no
+  `gc --auto`, cruft packs, or reflog expiry.
+- Transport works between repositories on the local disk only (paths, not
+  `ssh://`, `https://` or `git://` URLs); no shallow or partial clones,
+  submodules, `--mirror`, or `pull --rebase`.
 
 ## Working on it
 

@@ -93,3 +93,18 @@ milestones.
   `packed-refs` exactly as `git pack-refs --all` does, drops old packs and
   packed loose objects, and prunes unreachable loose objects past the
   two-week grace period. 86 tests pass.
+- 03:49 PST: **stage 5 done: clone, fetch, push, pull, remote. All five
+  stages of the brief are implemented.** Local transport opens the other
+  repository directly and sends what the receiver lacks as one pack.
+  Twin tests play each scenario with git and with pygit as the client
+  against identical copies of a server repository and compare output
+  (paths normalized), exit codes, refs, config, FETCH_HEAD and objects:
+  clone (plain, bare, empty, errors), fetch (updates, new branches,
+  auto-followed tags, `--prune`, forced updates), push (new branch,
+  up to date, fast-forward, non-fast-forward rejection with git's hint
+  variants, `--force`, `--delete`, tags, `-u`, the remote's
+  checked-out-branch refusal with its `remote:` lines), pull
+  (fast-forward, the divergent-branch refusal, merge with
+  `pull.rebase=false`) and remote. 91 tests pass on Python 3.13. README
+  now documents the whole design and its limits; todo.md lists the limits
+  to close next.

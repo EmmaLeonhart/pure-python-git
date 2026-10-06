@@ -1,14 +1,16 @@
-# todo.md: long-horizon stages
+# todo.md: long-horizon work
 
-Abstract destinations, from `data_lake/brief.md`. Each is broken into concrete
-steps in `queue.md` when work on it begins.
+The five stages of `data_lake/brief.md` are done (see `devlog.md`). What
+remains is closing the limits listed in README.md, most valuable first:
+the ones where pygit's output can differ from git's on ordinary use.
 
-- **Stage 2: the index.** Binary index format v2, `add`, `rm`, `status`,
-  `commit`, `log`, `.gitignore` rules.
-- **Stage 3: branches and diff.** Branches and tags, `checkout`/`switch`,
-  Myers diff with unified output between work tree, index and commits.
-- **Stage 4: merging.** Merge bases, fast-forward, three-way merge of trees
-  and file contents with conflict markers, `merge --abort`.
-- **Stage 5: packfiles and transport.** Read and write packs and pack indexes
-  (with deltas), `gc`, `clone`/`fetch`/`push` between local repositories.
-- **Design doc.** Keep README's design-and-limits section current per stage.
+- **Exact rename scoring.** Port diffcore-delta's spanhash similarity so
+  renames near the 50% threshold pair exactly as git pairs them (affects
+  `status`, `diff`, `commit` summaries, `merge`).
+- **Path display relative to the cwd everywhere.** `ls-tree` from a
+  subdirectory; check `diff`/`log` pathspecs from subdirectories.
+- **Combined diff.** `diff --cc` for unmerged paths during a merge.
+- **`log -p` / `log --stat` / `show`.** Reuse the diff output layer.
+- **Content filters.** `core.autocrlf`, `.gitattributes` `text`/`eol`/`binary`.
+- **More history editing.** `restore`, `stash`, `cherry-pick`, `rebase`.
+- **Pack fidelity.** Thin packs in `index-pack`, `.rev` files, `gc --auto`.

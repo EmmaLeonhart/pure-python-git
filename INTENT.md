@@ -57,6 +57,14 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
   suite is run locally on Windows (Python 3.13 and 3.11) before each push;
   Linux/macOS and Python 3.9 are untested.
 
+## Progress
+
+- 2026-10-06 03:49 PST: all five stages of the brief are implemented and
+  tested against git (91 tests). The brief's "keep going" is read as:
+  close the limits documented in README.md, most output-affecting first
+  (`todo.md`). This is an assumption; the user may prefer to stop here or
+  steer elsewhere.
+
 ## Open questions
 
 - None blocking. Exact CLI coverage per command (which flags) is decided as
