@@ -174,3 +174,11 @@ milestones.
   with cherry-pick. 107 tests pass. (One earlier run was cut off by its
   timeout while other workloads slowed the machine; the rerun took 8
   minutes.)
+- 08:33 PST: **`stash`** (`pygit/commands/stashing.py`): push/save with
+  `-m`, list, show (`-p`), apply/pop (`--index`), drop, clear. The stash
+  commits are byte-identical to git's (index commit; work-tree commit
+  with parents HEAD and the index commit, its message without a final
+  newline), refs/stash with its reflog as the stack, so either tool pops
+  the other's stash. Apply merges with git's labels, keeps added files
+  staged without `--index`, prints the long status (also on conflict, then
+  keeps the entry). Revision parsing gained `<ref>@{n}`. 110 tests pass.

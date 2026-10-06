@@ -5,9 +5,6 @@ in the same commit.
 
 ## History commands, from todo.md
 
-3. `stash` (`push`/no subcommand, `-m`, `list`, `show`, `pop`, `apply`,
-   `drop`, `clear`): stash commits shaped as git makes them (index and
-   work-tree commits, refs/stash with its reflog), so git can read them.
 4. `rebase <upstream>` (non-interactive): replay commits with the
    cherry-pick machinery, `--continue`/`--abort`/`--skip`, the
    `.git/rebase-merge` state git uses, and its messages.

@@ -50,7 +50,35 @@ def peel(repo, oid: str, want: bytes | None) -> str:
         raise GitError(f"object {oid} is a {t.decode()}, not a {want.decode()}")
 
 
+def reflog_entries(repo, refname: str) -> list[tuple[str, str, bytes]]:
+    """(old, new, message) for each reflog line, oldest first."""
+    p = repo.gitdir / "logs" / refname
+    try:
+        lines = p.read_bytes().splitlines()
+    except FileNotFoundError:
+        return []
+    out = []
+    for line in lines:
+        meta, _, msg = line.partition(b"\t")
+        parts = meta.split(b" ")
+        if len(parts) >= 2:
+            out.append((parts[0].decode(), parts[1].decode(), msg))
+    return out
+
+
+def _reflog_nth(repo, name: str, n: int) -> str:
+    """`<ref>@{n}`: the value the ref had n updates ago."""
+    got = resolve_ref_name(repo, name or "HEAD")
+    entries = reflog_entries(repo, got[1] if got else name)
+    if n >= len(entries):
+        raise GitError(f"log for '{name or 'HEAD'}' only has {len(entries)} entries")
+    return entries[len(entries) - 1 - n][1]
+
+
 def _base(repo, name: str) -> str:
+    m = re.match(r"^(.*)@\{(\d+)\}$", name)
+    if m:
+        return _reflog_nth(repo, m.group(1), int(m.group(2)))
     if name in ("", "@"):
         name = "HEAD"
     got = resolve_ref_name(repo, name)
