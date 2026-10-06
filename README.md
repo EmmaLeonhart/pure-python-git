@@ -17,8 +17,8 @@ Work in progress, built in five stages:
 | 1 | Object store: blobs, trees, commits, tags, loose objects, refs, HEAD; `hash-object`, `cat-file`, `ls-tree`, `rev-parse` | done |
 | 2 | Index v2; `add`, `rm`, `status`, `commit`, `log`; `.gitignore` | done |
 | 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | done |
-| 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | next |
-| 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | planned |
+| 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | done |
+| 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | next |
 
 ## Usage
 
@@ -59,6 +59,11 @@ engine is also checked against `git diff --no-index` on random inputs.
   (lightweight, annotated, `-d`, `-f`, `-l`, `-n`), `checkout` and
   `switch` (branches, `-b`/`-B`/`-c`, detached HEAD, paths), `reset`
   (`--soft`, `--mixed`, `--hard`, paths).
+- Stage 4: `merge-base` (`--all`, `--is-ancestor`), `merge-file`
+  (`-p`, `--diff3`, `--ours`/`--theirs`/`--union`, `-L`), `merge`
+  (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
+  commits, conflicts, `--abort`, `--continue`), with `status`, `diff` and
+  `commit` aware of merges in progress.
 
 ## Design and limits
 
@@ -94,6 +99,15 @@ The package is layered so each stage builds on the one below:
   git's two-way rules (local changes carry over when a path is the same
   in both trees; a checkout that would lose a change or overwrite an
   untracked file is refused before anything is touched).
+- `pygit/xmerge.py`: a port of git's `xmerge.c` (three-way file merge with
+  conflict refinement and git's marker format); identical to
+  `git merge-file` on random inputs in both conflict styles.
+- `pygit/merge_ort.py`: the tree merge, producing the results and
+  messages of git's `ort` strategy for the common cases (content and
+  add/add conflicts, modify/delete, renames on either side with the
+  content merged at the new path, rename/delete, rename/rename, mode
+  changes, binary files, file/directory clashes), and recursive virtual
+  merge bases for criss-cross histories.
 - `pygit/history.py`, `pygit/pretty.py`: history walks in git's order
   (committer date, with path-limited simplification of merges) and commit
   formatting.
@@ -124,6 +138,12 @@ Limits so far:
   rule only); unmerged entries are not shown yet.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
   `--overlay` options; `restore` and `stash` are not implemented.
+- `merge` merges one branch at a time (no octopus), uses only the ort
+  strategy without options (`-X ours`, `-s recursive`, ...), and does not
+  sign, run hooks or open an editor. Unusual conflicts (distinct types,
+  rename/rename(2to1), directory renames) are reported but not resolved
+  the way ort resolves them. `git diff` shows unmerged paths as
+  `* Unmerged path` but has no combined diff (`diff --cc`).
 
 ## Working on it
 

@@ -177,7 +177,16 @@ def cmd_diff(args):
         old = _filter(_index_map(idx), spec)
         worktree.refresh(repo, idx)
         new = _worktree_map(repo, idx, set(old), contents, old)
+    unmerged = set()
+    if idx is not None and len(revs) < 2:
+        unmerged = {p for p in idx.conflicted_paths() if spec.matches(p)}
+        old = {p: v for p, v in old.items() if p not in unmerged}
+        new = {p: v for p, v in new.items() if p not in unmerged}
     pairs = diff_maps(repo.odb, old, new, renames=renames and not (not revs and not cached))
+    if unmerged:
+        from pygit.treediff import FilePair
+        pairs += [FilePair("U", p, p) for p in unmerged]
+        pairs.sort(key=lambda x: x.path)
     if not quiet:
         if fmt == "patch":
             out(diffout.patch(repo, pairs, contents, context, full_index=full_index))

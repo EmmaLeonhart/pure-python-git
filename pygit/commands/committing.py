@@ -50,7 +50,8 @@ def commit_summary(repo, oid: str, c: Commit, branch_label: bytes, root: bool,
         i, d, _ = line_counts(repo.odb, p)
         ins += i
         dels += d
-    if pairs:
+    # A merge commit gets no diffstat (log shows no diff for merges).
+    if pairs and len(c.parents) < 2:
         lines.append(shortstat(len(pairs), ins, dels))
         lines.append(summary_lines(pairs))
     return b"".join(lines)
@@ -125,7 +126,10 @@ def cmd_commit(args):
         raw = (repo.gitdir / "MERGE_MSG").read_bytes()
     else:
         raise GitError("pygit commit needs a message (-m or -F); it does not open an editor")
-    mode = a.cleanup or ("strip" if (merge_heads and not a.messages and not a.file) else "whitespace")
+    # git's "default" cleanup is "strip" only when an editor runs; pygit never
+    # opens one, so it is "whitespace" (a merge's "# Conflicts:" lines stay,
+    # as with `git commit --no-edit`).
+    mode = a.cleanup or "whitespace"
     if mode == "default":
         mode = "whitespace"
     msg = cleanup_message(raw, mode)

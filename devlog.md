@@ -65,3 +65,18 @@ milestones.
   paths, `checkout -B` may reset the current branch, advice text honors
   `advice.detachedHead`, nested-tag and ref-syntax hints. 71 tests pass.
   Stage 4 is broken down in queue.md.
+- 03:30 PST: **stage 4 done: merging.** `pygit/xmerge.py` ports git's
+  xmerge.c and matches `git merge-file` on 700 random cases in merge and
+  diff3 style (git's merges run xdiff without the indent heuristic, so the
+  port does too). `pygit/merge_ort.py` gives ort's results and messages for
+  the common cases, with recursive virtual bases for criss-cross
+  histories. `merge` covers fast-forward, merge commits, conflicts
+  (MERGE_HEAD/MERGE_MSG/MERGE_MODE/ORIG_HEAD), `--ff-only`, `--no-ff`,
+  `--no-commit`, `--abort`, `--continue`, and refusals (dirty index, work
+  tree in the way, unmerged index). Status during a merge, `U` entries in
+  `diff`, and committing the resolution (with whitespace cleanup, which
+  keeps the `# Conflicts:` lines as `git commit --no-edit` does) match git.
+  One test mistake to note: a test ran `git commit` without `--no-edit`
+  on a merge, so git waited for an editor and the run hung for 10 minutes;
+  the test environment now sets `GIT_EDITOR=false`. 80 tests pass.
+  Stage 5 is broken down in queue.md.

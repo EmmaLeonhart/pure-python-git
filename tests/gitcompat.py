@@ -40,6 +40,8 @@ def base_env(home: Path) -> dict:
         "TZ": "UTC",
         "GIT_PAGER": "cat",
         "PAGER": "cat",
+        # A test that makes git want an editor fails instead of hanging.
+        "GIT_EDITOR": "false",
     })
     return env
 

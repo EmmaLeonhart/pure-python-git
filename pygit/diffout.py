@@ -53,6 +53,9 @@ def patch(repo, pairs: list[FilePair], contents: Contents, context: int = 3,
           full_index: bool = False) -> bytes:
     out = []
     for p in pairs:
+        if p.status == "U":
+            out.append(b"* Unmerged path " + quote_path(p.path) + b"\n")
+            continue
         if p.status == "T":
             # A type change is shown as a deletion and an addition.
             out.append(_one_patch(repo, FilePair("D", p.old_path, None, p.old_mode, 0, p.old_oid, None),
@@ -113,6 +116,8 @@ def _one_patch(repo, p: FilePair, contents: Contents, context, src_prefix, dst_p
 
 def _counts(p: FilePair, contents: Contents):
     """(added, deleted, binary) for stat output; binary counts are byte sizes."""
+    if p.status == "U":
+        return 0, 0, False
     a, b = contents.get(p.old_oid), contents.get(p.new_oid)
     if p.old_mode == 0o160000 or p.new_mode == 0o160000:
         return (1 if p.new_oid else 0), (1 if p.old_oid else 0), False
@@ -156,8 +161,10 @@ def stat(pairs: list[FilePair], contents: Contents, width: int | None = None,
     for p in pairs:
         added, deleted, binary = _counts(p, contents)
         name = _stat_name(p)
-        files.append((name, added, deleted, binary))
+        files.append((name, added, deleted, binary, p.status == "U"))
         max_len = max(max_len, _width(name))
+        if p.status == "U":
+            continue
         if binary:
             w = 14 + len(str(added)) + len(str(deleted))
             bin_width = max(bin_width, w)
@@ -184,7 +191,7 @@ def stat(pairs: list[FilePair], contents: Contents, width: int | None = None,
             gw = width - number_width - 6 - nw
     out = []
     total_add = total_del = 0
-    for name, added, deleted, binary in files:
+    for name, added, deleted, binary, unmerged in files:
         prefix = b""
         ln = nw
         shown = name
@@ -201,6 +208,9 @@ def stat(pairs: list[FilePair], contents: Contents, width: int | None = None,
             shown = text.encode("utf-8")
         pad = b" " * max(ln - _width(shown), 0)
         head = b" " + prefix + shown + pad + b" |"
+        if unmerged:
+            out.append(head + b" Unmerged\n")
+            continue
         if binary:
             line = head + b" %*s" % (number_width, b"Bin")
             if added or deleted:
@@ -225,11 +235,13 @@ def stat(pairs: list[FilePair], contents: Contents, width: int | None = None,
             line += b" "
         line += b"+" * add + b"-" * dele
         out.append(line + b"\n")
-    out.append(shortstat(len(pairs), total_add, total_del))
+    counted = sum(1 for f in files if not f[4])
+    out.append(shortstat(counted, total_add, total_del))
     return b"".join(out)
 
 
 def shortstat_for(pairs, contents) -> bytes:
+    pairs = [p for p in pairs if p.status != "U"]
     if not pairs:
         return b""
     ins = dels = 0

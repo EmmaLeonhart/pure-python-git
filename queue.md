@@ -3,26 +3,28 @@
 Delete-only: a finished item is removed from here and logged in `devlog.md`
 in the same commit.
 
-## Stage 4: merging
+## Stage 5: packfiles and local transport
 
-1. `merge-base` command (`--all`, `--is-ancestor`, `--octopus` not needed),
-   checked against git on criss-cross histories (several best bases).
-2. Three-way file merge (`merge-file`): a port of git's xmerge (conflict
-   regions from two xdiff scripts against the base, `<<<<<<< ours`,
-   `=======`, `>>>>>>> theirs` markers with git's labels, zealous
-   simplification of conflict hunks, identical changes on both sides
-   merged cleanly). Tested byte for byte against `git merge-file -p`.
-3. Three-way tree merge (the "ort" strategy's results for the common
-   cases): clean merges of non-overlapping changes, content conflicts,
-   modify/delete, add/add, rename detection on both sides, file/directory
-   conflicts; index stages 1-3 for conflicts; the work tree gets the
-   merged files with markers.
-4. `merge <branch>`: "Already up to date.", fast-forward (`Updating a..b`
-   / `Fast-forward` + diffstat), `--ff-only`, `--no-ff`, merge commit with
-   message "Merge branch 'x'", conflicts ("CONFLICT (content): ..." and
-   "Automatic merge failed; fix conflicts and then commit the result."),
-   MERGE_HEAD/MERGE_MSG/ORIG_HEAD, refusing to merge over local changes.
-5. `merge --abort` (and `--continue`), status during a merge ("You have
-   unmerged paths."/"All conflicts fixed but you are still merging."),
-   committing a resolved merge, `diff` of unmerged paths.
-6. README design section for stage 4; tests against git for each case.
+1. Pack reading: `.pack` v2 files and `.idx` v2 indexes (fanout, sorted ids,
+   CRC32, 4- and 8-byte offsets), all object types including `OFS_DELTA`
+   and `REF_DELTA`, delta application, a cache of resolved bases. Plugs into
+   `ObjectStore` (`pygit/pack.py`, `load_packs`), so every command reads
+   packed repositories. Tests: run the whole suite's sample repos after
+   `git gc`, and `verify-pack`-style checks.
+2. `verify-pack -v` and `index-pack` output byte-identical to git (or as
+   close as git defines it: object ids, types, sizes, offsets).
+3. Pack writing: `pack-objects` with git's object order, delta compression
+   (a sliding window of candidates, git-style delta encoding with copy and
+   insert instructions), `.idx` v2 generation; git's `verify-pack` and
+   `fsck` accept the result.
+4. `gc`: pack all reachable objects (and refs into `packed-refs`), remove
+   loose objects that are now packed, `prune` unreachable loose objects
+   older than the grace period.
+5. Local transport: `clone <path>` (objects copied as a pack, refs mapped to
+   `refs/remotes/origin/*`, `origin` remote config, `HEAD` checkout,
+   `--bare`), `fetch` (negotiating with the local repository's refs,
+   updating remote-tracking refs, FETCH_HEAD, output lines git-style),
+   `push` (fast-forward checks, non-fast-forward rejection, creating and
+   deleting remote branches, refusing to update a checked-out branch).
+   Also `remote add/-v`, `pull` (fetch + merge).
+6. README design section for stage 5 and a final pass over the limits.

@@ -493,8 +493,10 @@ def long_status(repo, st, prefix: bytes, hints: bool = True, show_untracked: boo
     # Every paragraph after the branch line ends with a blank line.
     if tracking:
         lines.append(tracking + b"\n")
-    from pygit.merging import merge_state_lines
+    from pygit.merging import in_merge, merge_state_lines, resolution_hint
     lines.extend(merge_state_lines(repo, st))
+    # During a merge git prints no "to unstage" hints (whence != FROM_COMMIT).
+    unstage_hints = hints and not in_merge(repo)
     if not born:
         lines.append(b"\nInitial commit\n\n" if from_commit else b"\nNo commits yet\n\n")
 
@@ -503,7 +505,7 @@ def long_status(repo, st, prefix: bytes, hints: bool = True, show_untracked: boo
 
     if st.staged:
         lines.append(b"Changes to be committed:\n")
-        if hints:
+        if unstage_hints:
             lines.append(b'  (use "git restore --staged <file>..." to unstage)\n' if born
                          else b'  (use "git rm --cached <file>..." to unstage)\n')
         for c in st.staged:
@@ -516,12 +518,10 @@ def long_status(repo, st, prefix: bytes, hints: bool = True, show_untracked: boo
     if st.unmerged:
         lines.append(b"Unmerged paths:\n")
         if hints:
-            lines.append(b'  (use "git restore --staged <file>..." to unstage)\n' if born
-                         else b'  (use "git rm --cached <file>..." to unstage)\n')
-            if any(code in ("DD", "AU", "UD", "UA", "DU") for _, code in st.unmerged):
-                lines.append(b'  (use "git add/rm <file>..." as appropriate to mark resolution)\n')
-            else:
-                lines.append(b'  (use "git add <file>..." to mark resolution)\n')
+            if unstage_hints:
+                lines.append(b'  (use "git restore --staged <file>..." to unstage)\n' if born
+                             else b'  (use "git rm --cached <file>..." to unstage)\n')
+            lines.append(resolution_hint([code for _, code in st.unmerged]))
         for path, code in st.unmerged:
             lines.append(b"\t" + UNMERGED_LABELS[code].ljust(17).encode() + show(path) + b"\n")
         lines.append(b"\n")
