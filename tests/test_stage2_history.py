@@ -40,8 +40,14 @@ class TwinTestCase(GitTestCase):
         """Run `git <args>` in g and `pygit <args>` in p; compare everything."""
         g = self.git(*args, cwd=self.g, input=input, check=False)
         p = self.pygit(*args, cwd=self.p, input=input, check=False)
-        self.assertEqual(p.stdout, g.stdout, f"stdout differs for {args}\npygit stderr: {p.stderr!r}")
-        self.assertEqual(p.stderr, g.stderr, f"stderr differs for {args}")
+
+        def norm(b):  # the twin's path appears in some messages
+            for d in (self.p, self.g):
+                b = b.replace(str(d).replace("\\", "/").encode(), b"<repo>")
+            return b
+
+        self.assertEqual(norm(p.stdout), norm(g.stdout), f"stdout differs for {args}\npygit stderr: {p.stderr!r}")
+        self.assertEqual(norm(p.stderr), norm(g.stderr), f"stderr differs for {args}")
         self.assertEqual(p.returncode, g.returncode, f"exit code differs for {args}")
         gh = self.git("rev-parse", "-q", "--verify", "HEAD", cwd=self.g, check=False).stdout
         ph = self.git("rev-parse", "-q", "--verify", "HEAD", cwd=self.p, check=False).stdout

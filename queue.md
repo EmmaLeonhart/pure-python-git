@@ -3,30 +3,26 @@
 Delete-only: a finished item is removed from here and logged in `devlog.md`
 in the same commit.
 
-## Stage 3: branches, tags, checkout/switch, diff
+## Stage 4: merging
 
-1. `diff`: work tree vs index (default), `--cached`/`--staged` (index vs
-   HEAD or a commit), `<commit>` (work tree vs commit), `<a> <b>` and
-   `a..b` (commit vs commit). Headers byte-identical to git: `diff --git`,
-   `index` (abbreviated ids and mode), new/deleted file mode, old/new mode,
-   similarity index and rename from/to, `Binary files ... differ`,
-   `\ No newline at end of file`. Options: `-U<n>`, `--stat`, `--numstat`,
-   `--shortstat`, `--name-only`, `--name-status`, `--no-renames`,
-   `--quiet`/`--exit-code`, pathspecs.
-2. `branch`: list (current marked `*`, `-v`, `-a`, `-r`), create (at HEAD or
-   a start point), `-d`/`-D` (with the "not fully merged" check), `-m`/`-M`,
-   `--set-upstream-to`, `--unset-upstream`, `--show-current`; messages
-   identical to git.
-3. `tag`: list (with `-l` patterns), lightweight, annotated (`-a -m`,
-   `-F`), `-d`, `-f`, `-n` output.
-4. Two-tree checkout engine: move the work tree and index from one commit
-   to another, refusing when local changes would be overwritten (git's
-   messages), keeping unrelated local changes, removing emptied
-   directories.
-5. `switch` and `checkout` (branch, `-b`/`-c`, `-B`, `--detach`, a commit
-   with git's detached-HEAD advice, `checkout [<rev>] -- <paths>`), reflog
-   messages `checkout: moving from X to Y`, "Switched to ..." and tracking
-   output.
-6. `reset` (`--soft`, `--mixed`, `--hard`, `reset -- paths`), needed by
-   stage 4's `merge --abort` and by tests; `ORIG_HEAD`.
-7. README design section for stage 3; tests for every command against git.
+1. `merge-base` command (`--all`, `--is-ancestor`, `--octopus` not needed),
+   checked against git on criss-cross histories (several best bases).
+2. Three-way file merge (`merge-file`): a port of git's xmerge (conflict
+   regions from two xdiff scripts against the base, `<<<<<<< ours`,
+   `=======`, `>>>>>>> theirs` markers with git's labels, zealous
+   simplification of conflict hunks, identical changes on both sides
+   merged cleanly). Tested byte for byte against `git merge-file -p`.
+3. Three-way tree merge (the "ort" strategy's results for the common
+   cases): clean merges of non-overlapping changes, content conflicts,
+   modify/delete, add/add, rename detection on both sides, file/directory
+   conflicts; index stages 1-3 for conflicts; the work tree gets the
+   merged files with markers.
+4. `merge <branch>`: "Already up to date.", fast-forward (`Updating a..b`
+   / `Fast-forward` + diffstat), `--ff-only`, `--no-ff`, merge commit with
+   message "Merge branch 'x'", conflicts ("CONFLICT (content): ..." and
+   "Automatic merge failed; fix conflicts and then commit the result."),
+   MERGE_HEAD/MERGE_MSG/ORIG_HEAD, refusing to merge over local changes.
+5. `merge --abort` (and `--continue`), status during a merge ("You have
+   unmerged paths."/"All conflicts fixed but you are still merging."),
+   committing a resolved merge, `diff` of unmerged paths.
+6. README design section for stage 4; tests against git for each case.

@@ -48,7 +48,7 @@ def err(text) -> None:
 def _load_commands() -> None:
     # Imported for their @command registrations.
     from pygit.commands import plumbing  # noqa: F401
-    for mod in ("porcelain", "committing", "branching", "merging", "transport"):
+    for mod in ("porcelain", "committing", "diffing", "branching", "merging", "transport"):
         try:
             __import__(f"pygit.commands.{mod}")
         except ModuleNotFoundError as e:

@@ -16,8 +16,8 @@ Work in progress, built in five stages:
 |---|---|---|
 | 1 | Object store: blobs, trees, commits, tags, loose objects, refs, HEAD; `hash-object`, `cat-file`, `ls-tree`, `rev-parse` | done |
 | 2 | Index v2; `add`, `rm`, `status`, `commit`, `log`; `.gitignore` | done |
-| 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | next (the diff engine is already done) |
-| 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | planned |
+| 3 | Branches, tags, `checkout`/`switch`, Myers `diff` | done |
+| 4 | Merge: merge bases, fast-forward, three-way merge, conflicts, `merge --abort` | next |
 | 5 | Packfiles (with deltas), `gc`, local `clone`/`fetch`/`push` | planned |
 
 ## Usage
@@ -52,6 +52,13 @@ engine is also checked against `git diff --no-index` on random inputs.
   `--reverse`, `--first-parent`, ranges `a..b`, `a...b`, `^a`, `-- paths`),
   plus `ls-files`, `write-tree`, `read-tree`, `update-index`,
   `check-ignore`.
+- Stage 3: `diff` (work tree, `--cached`, commits, `a..b`, `a...b`;
+  patches, `--stat`, `--numstat`, `--shortstat`, `--name-only`,
+  `--name-status`, `-U<n>`, `--exit-code`, `--quiet`, `-z`), `branch`
+  (list, `-v`/`-vv`, create, `-d`/`-D`, `-m`, `-c`, upstreams), `tag`
+  (lightweight, annotated, `-d`, `-f`, `-l`, `-n`), `checkout` and
+  `switch` (branches, `-b`/`-B`/`-c`, detached HEAD, paths), `reset`
+  (`--soft`, `--mixed`, `--hard`, paths).
 
 ## Design and limits
 
@@ -81,6 +88,12 @@ The package is layered so each stage builds on the one below:
   emission). It produces the same hunks as git, not only a minimal diff.
 - `pygit/diffcore.py`, `pygit/treediff.py`: tree comparison and rename
   detection; the diffstat summary `commit` prints.
+- `pygit/diffout.py`: patch headers, `--stat` layout (git's width and
+  scaling rules), numstat and name-status output.
+- `pygit/checkout.py`: moving the index and work tree between trees with
+  git's two-way rules (local changes carry over when a path is the same
+  in both trees; a checkout that would lose a change or overwrite an
+  untracked file is refused before anything is touched).
 - `pygit/history.py`, `pygit/pretty.py`: history walks in git's order
   (committer date, with path-limited simplification of merges) and commit
   formatting.
@@ -106,6 +119,11 @@ Limits so far:
   `--follow`; path limiting implements git's default simplification only.
 - Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
   written.
+- `diff` has no `--color`, word diff, `--relative`, `-M<n>` thresholds,
+  copy detection or userdiff drivers (function context uses git's default
+  rule only); unmerged entries are not shown yet.
+- `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
+  `--overlay` options; `restore` and `stash` are not implemented.
 
 ## Working on it
 

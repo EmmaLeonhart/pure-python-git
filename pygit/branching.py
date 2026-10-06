@@ -22,20 +22,36 @@ def detached_description(repo) -> bytes:
         lines = log.read_bytes().splitlines()
     except FileNotFoundError:
         lines = []
+    from pygit import revparse
     for line in reversed(lines):
         meta, _, msg = line.partition(b"\t")
         if msg.startswith(b"checkout: moving from "):
-            target = msg.rsplit(b" to ", 1)[-1]
+            target = msg.rsplit(b" to ", 1)[-1].decode("utf-8", "replace")
             new = meta.split(b" ")[1].decode()
-            from pygit import revparse
-            # git shows the name the user checked out if it still names HEAD.
-            short = target
-            if len(target) == 40:
-                short = revparse.short_id(repo, target.decode()).encode()
-            if head == new:
-                return b"HEAD detached at " + short
-            return b"HEAD detached from " + short
+            # wt_status_get_detached_from: if the name the user checked out is
+            # a ref that (peeled) points at that commit, show the ref name
+            # (without refs/tags/ or refs/remotes/); else an abbreviated id.
+            got = revparse.resolve_ref_name(repo, target) if not _is_hex(target) else None
+            shown = None
+            if got:
+                try:
+                    if got[0] == new or revparse.peel(repo, got[0], b"commit") == new:
+                        shown = got[1]
+                        for pre in ("refs/tags/", "refs/remotes/"):
+                            if shown.startswith(pre):
+                                shown = shown[len(pre):]
+                                break
+                except Exception:
+                    shown = None
+            if shown is None:
+                shown = revparse.short_id(repo, new)
+            word = b"at " if head == new else b"from "
+            return b"HEAD detached " + word + shown.encode()
     return b"Not currently on any branch."
+
+
+def _is_hex(s: str) -> bool:
+    return len(s) >= 4 and all(c in "0123456789abcdef" for c in s)
 
 
 def upstream(repo, branch: str) -> tuple[str, str] | None:

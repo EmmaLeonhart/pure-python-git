@@ -52,3 +52,16 @@ milestones.
   `log` covers the built-in formats, `--format` placeholders, ranges and
   path limiting with git's merge simplification. 58 tests pass. Stage 3
   is broken down in queue.md.
+- 03:05 PST: **stage 3 done: diff, branch, tag, checkout/switch, reset.**
+  `diff` renders patches (all header forms, binary, quoted names, the tab
+  after `---`/`+++` names that contain spaces), `--stat` with git's width
+  and scaling rules, numstat, name-only/status. The checkout engine
+  (`pygit/checkout.py`) applies git's two-way rules and refuses before
+  touching anything. Tests run every command in twin repos and compare
+  output, HEAD, index, file contents and status after each step. Details
+  git does that the tests caught: the detached-HEAD label resolves the
+  checked-out name through the reflog (`HEAD detached at refs/heads/main`
+  is real git output), `checkout <tree> -- paths` counts only rewritten
+  paths, `checkout -B` may reset the current branch, advice text honors
+  `advice.detachedHead`, nested-tag and ref-syntax hints. 71 tests pass.
+  Stage 4 is broken down in queue.md.
