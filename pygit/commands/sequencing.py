@@ -55,9 +55,10 @@ def _subject(c: Commit) -> str:
     return split_message(c.message)[0].decode("utf-8", "replace")
 
 
-def apply_commit(repo, oid: str, action: str = "cherry-pick"):
+def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = False):
     """Merge one commit's changes onto HEAD (base: its parent) into the
-    index and work tree, printing the merge messages. Returns (merge
+    index and work tree, printing the merge messages; `reverse` undoes the
+    commit instead (base: the commit, target: its parent). Returns (merge
     result, new index, commit, short id, subject, HEAD tree); raises
     Fatal when nothing was touched."""
     from pygit import merge_ort
@@ -77,11 +78,15 @@ def apply_commit(repo, oid: str, action: str = "cherry-pick"):
                     "hint: commit your changes or stash them to proceed.\n")
     short = revparse.short_id(repo, oid)
     subject = _subject(c)
-    base_tree = Commit.parse(repo.odb.read(c.parents[0])[1]).tree if c.parents else None
+    parent_tree = Commit.parse(repo.odb.read(c.parents[0])[1]).tree if c.parents else None
     head_tree = Commit.parse(repo.odb.read(head)[1]).tree if head else None
-    merger = merge_ort.Merger(repo, "HEAD", f"{short} ({subject})", f"parent of {short} ({subject})",
-                              style=_config_style())
-    res = merger.merge_trees(base_tree, head_tree, c.tree)
+    this_label, parent_label = f"{short} ({subject})", f"parent of {short} ({subject})"
+    if reverse:
+        merger = merge_ort.Merger(repo, "HEAD", parent_label, this_label, style=_config_style())
+        res = merger.merge_trees(c.tree, head_tree, parent_tree)
+    else:
+        merger = merge_ort.Merger(repo, "HEAD", this_label, parent_label, style=_config_style())
+        res = merger.merge_trees(parent_tree, head_tree, c.tree)
     applied = apply_result(repo, idx, head_map, res)
     if isinstance(applied, tuple):
         local, untracked = applied
@@ -126,69 +131,118 @@ def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -
         from pygit.status import compute
         out(long_status(repo, compute(repo), cwd_prefix(repo)))
         return 1
-    _commit(repo, head, tree, c, message)
+    _commit(repo, head, tree, c.author, message)
     return 0
 
 
-def _commit(repo, head: str, tree: str, original: Commit, message: bytes) -> str:
-    """Record a picked commit: original author, new committer."""
+REVERT_HINT = CONFLICT_HINT.replace("cherry-pick", "revert")
+
+
+def revert_one(repo, oid: str, no_commit: bool = False) -> int:
+    """Undo one commit on top of HEAD (git revert). Same returns as pick."""
+    from pygit.ident import ident
+    head, _ = Refs(repo).resolve("HEAD")
+    res, applied, c, short, subject, head_tree = apply_commit(repo, oid, "revert", reverse=True)
+    message = f'Revert "{subject}"\n\nThis reverts commit {oid}.\n'.encode()
+    if not res.clean:
+        conflicts = sorted({p for p, s in res.entries if s})
+        if not no_commit:
+            _write(repo, "REVERT_HEAD", (oid + "\n").encode())
+        _write(repo, "MERGE_MSG", message.rstrip(b"\n") + b"\n\n# Conflicts:\n" +
+               b"".join(b"#\t" + p + b"\n" for p in conflicts))
+        err(f"error: could not revert {short}... {subject}\n" + REVERT_HINT)
+        return 1
+    if no_commit:
+        # Unlike cherry-pick -n, revert -n records REVERT_HEAD.
+        _write(repo, "REVERT_HEAD", (oid + "\n").encode())
+        _write(repo, "MERGE_MSG", message)
+        return 0
+    tree = applied.write_tree(repo.odb)
+    if tree == head_tree:
+        # An empty revert: git shows the status and stops.
+        _write(repo, "MERGE_MSG", message)
+        from pygit.commands.porcelain import long_status
+        from pygit.pathspec import cwd_prefix
+        from pygit.status import compute
+        out(long_status(repo, compute(repo), cwd_prefix(repo)))
+        return 1
+    _commit(repo, head, tree, ident(repo, "author"), message, reflog="revert")
+    return 0
+
+
+def _commit(repo, head: str, tree: str, author, message: bytes, reflog: str = "cherry-pick",
+            date_interesting: bool = True) -> str:
+    """Record a picked or reverting commit with a new committer."""
     from pygit.commands.committing import commit_summary
     from pygit.ident import ident
     refs = Refs(repo)
-    new = Commit(tree, [head] if head else [], original.author, ident(repo, "committer"),
+    new = Commit(tree, [head] if head else [], author, ident(repo, "committer"),
                  cleanup_message(message, "whitespace"))
     oid = repo.odb.write(b"commit", new.serialize())
-    refs.update("HEAD", oid, f"cherry-pick: {_subject(new)}")
+    refs.update("HEAD", oid, f"{reflog}: {_subject(new)}")
     target = refs.head_branch()
     label = target[len("refs/heads/"):].encode() if target and target.startswith("refs/heads/") \
         else b"detached HEAD"
-    out(commit_summary(repo, oid, new, label, root=not head, date_interesting=True))
+    out(commit_summary(repo, oid, new, label, root=not head, date_interesting=date_interesting))
     return oid
 
 
-def _todo(repo) -> list[str]:
+# -- the sequencer: several commits, and --continue/--skip/--abort -------------------
+
+OPS = {"pick": ("cherry-pick", "CHERRY_PICK_HEAD"), "revert": ("revert", "REVERT_HEAD")}
+
+
+def _todo(repo) -> list[tuple[str, str]]:
+    """(operation, commit id) entries; git writes abbreviated ids."""
     p = repo.gitdir / "sequencer" / "todo"
     if not p.is_file():
         return []
-    # Entries name abbreviated ids, as git writes them.
-    return [revparse.resolve(repo, line.split()[1])
-            for line in p.read_text(encoding="utf-8").splitlines() if line.startswith("pick ")]
+    out_ = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] in OPS:
+            out_.append((parts[0], revparse.resolve(repo, parts[1])))
+    return out_
 
 
-def _save_sequencer(repo, orig_head: str, remaining: list[str]) -> None:
+def _save_sequencer(repo, orig_head: str, remaining: list[tuple[str, str]]) -> None:
     lines = []
-    for oid in remaining:
+    for op, oid in remaining:
         c = Commit.parse(repo.odb.read(oid)[1])
-        lines.append(f"pick {revparse.short_id(repo, oid)} {_subject(c)}\n")
+        lines.append(f"{op} {revparse.short_id(repo, oid)} {_subject(c)}\n")
     head, _ = Refs(repo).resolve("HEAD")
     _write(repo, "sequencer/head", (orig_head + "\n").encode())
     _write(repo, "sequencer/todo", "".join(lines).encode())
     _write(repo, "sequencer/abort-safety", ((head or "") + "\n").encode())
 
 
-def run_picks(repo, oids: list[str], record_origin: bool, no_commit: bool, orig_head: str | None) -> int:
-    for i, oid in enumerate(oids):
+def run_todo(repo, items: list[tuple[str, str]], record_origin: bool, no_commit: bool,
+             orig_head: str | None, name: str) -> int:
+    for i, (op, oid) in enumerate(items):
         try:
-            rc = pick(repo, oid, record_origin, no_commit)
+            if op == "revert":
+                rc = revert_one(repo, oid, no_commit)
+            else:
+                rc = pick(repo, oid, record_origin, no_commit)
         except Fatal as e:
-            err(str(e) + "fatal: cherry-pick failed\n")
+            err(str(e) + f"fatal: {name} failed\n")
             return 128
         if rc:
-            if len(oids) > 1 or (repo.gitdir / "sequencer").is_dir():
-                _save_sequencer(repo, orig_head, oids[i + 1:])
+            if len(items) > 1 or (repo.gitdir / "sequencer").is_dir():
+                _save_sequencer(repo, orig_head, items[i + 1:])
             return rc
     _remove(repo, "sequencer")
     return 0
 
 
 def _reset_touched(repo) -> None:
-    """Back to HEAD for every path the stopped pick touched."""
+    """Back to HEAD for every path the stopped operation touched."""
     from pygit.commands.merging import _abort
     _abort(repo)
 
 
-@command("cherry-pick")
-def cmd_cherry_pick(args):
+def _sequencer_command(args, op: str) -> int:
+    name, head_file = OPS[op]
     repo = find_repo()
     if repo.worktree is None:
         raise GitError("this operation must be run in a work tree")
@@ -196,10 +250,12 @@ def cmd_cherry_pick(args):
     action = None
     revs = []
     for arg in args:
-        if arg == "-x":
+        if arg == "-x" and op == "pick":
             record_origin = True
         elif arg in ("-n", "--no-commit"):
             no_commit = True
+        elif arg in ("--no-edit", "--edit", "-e"):
+            pass  # pygit never opens an editor
         elif arg in ("--continue", "--abort", "--skip", "--quit"):
             action = arg[2:]
         elif arg.startswith("-"):
@@ -207,78 +263,103 @@ def cmd_cherry_pick(args):
         else:
             revs.append(arg)
     refs = Refs(repo)
-    in_progress = (repo.gitdir / "CHERRY_PICK_HEAD").is_file() or (repo.gitdir / "sequencer").is_dir()
+    stopped = next((f for f in ("CHERRY_PICK_HEAD", "REVERT_HEAD") if (repo.gitdir / f).is_file()), None)
+    in_progress = stopped is not None or (repo.gitdir / "sequencer").is_dir()
     if action:
         if not in_progress:
-            err("error: no cherry-pick or revert in progress\nfatal: cherry-pick failed\n")
+            err(f"error: no cherry-pick or revert in progress\nfatal: {name} failed\n")
             return 128
         orig = (repo.gitdir / "sequencer" / "head").read_text().strip() \
             if (repo.gitdir / "sequencer" / "head").is_file() else None
         todo = _todo(repo)
         if action == "quit":
-            _remove(repo, "sequencer", "CHERRY_PICK_HEAD")
+            _remove(repo, "sequencer", "CHERRY_PICK_HEAD", "REVERT_HEAD")
             return 0
         if action == "abort":
             _reset_touched(repo)
-            _remove(repo, "CHERRY_PICK_HEAD", "MERGE_MSG")
+            _remove(repo, "CHERRY_PICK_HEAD", "REVERT_HEAD", "MERGE_MSG")
             if orig:
                 from pygit.checkout import switch_trees
                 head, _ = refs.resolve("HEAD")
                 switch_trees(repo, Commit.parse(repo.odb.read(head)[1]).tree,
                              Commit.parse(repo.odb.read(orig)[1]).tree, force=True)
-                refs.update("HEAD", orig, "cherry-pick: abort")
+                refs.update("HEAD", orig, f"{name}: abort")
             _remove(repo, "sequencer")
             return 0
         if action == "skip":
             _reset_touched(repo)
-            _remove(repo, "CHERRY_PICK_HEAD", "MERGE_MSG")
+            _remove(repo, "CHERRY_PICK_HEAD", "REVERT_HEAD", "MERGE_MSG")
         else:  # continue
-            idx = Index.read(repo)
-            if idx.has_conflicts():
+            if Index.read(repo).has_conflicts():
                 err("error: Committing is not possible because you have unmerged files.\n"
                     "hint: Fix them up in the work tree, and then use 'git add/rm <file>'\n"
                     "hint: as appropriate to mark resolution and make a commit.\n"
-                    "fatal: cherry-pick failed\n")
+                    f"fatal: {name} failed\n")
                 return 128
-            if (repo.gitdir / "CHERRY_PICK_HEAD").is_file():
+            if stopped:
                 rc = continue_commit(repo)
                 if rc:
                     return rc
-        return run_picks(repo, todo, record_origin, no_commit, orig)
+        return run_todo(repo, todo, record_origin, no_commit, orig, name)
     if Index.read(repo).has_conflicts():
-        err("error: Cherry-picking is not possible because you have unmerged files.\n"
+        verb = "Cherry-picking" if op == "pick" else "Reverting"
+        err(f"error: {verb} is not possible because you have unmerged files.\n"
             "hint: Fix them up in the work tree, and then use 'git add/rm <file>'\n"
             "hint: as appropriate to mark resolution and make a commit.\n"
-            "fatal: cherry-pick failed\n")
+            f"fatal: {name} failed\n")
         return 128
     if in_progress:
-        err("error: cherry-pick is already in progress\n"
-            "hint: try \"git cherry-pick (--continue | --abort | --quit)\"\n"
-            "fatal: cherry-pick failed\n")
+        err(f"error: {'cherry-pick' if stopped == 'CHERRY_PICK_HEAD' else 'revert'} is already in progress\n"
+            f"hint: try \"git {name} (--continue | --abort | --quit)\"\n"
+            f"fatal: {name} failed\n")
         return 128
     if not revs:
         raise GitError("empty commit set passed")
-    oids = []
+    items = []
     for r in revs:
         try:
-            oids.append(revparse.peel(repo, revparse.resolve(repo, r), b"commit"))
+            items.append((op, revparse.peel(repo, revparse.resolve(repo, r), b"commit")))
         except GitError:
             raise GitError(f"bad revision '{r}'")
     head, _ = refs.resolve("HEAD")
     if head:
         _write(repo, "ORIG_HEAD", (head + "\n").encode())
-    return run_picks(repo, oids, record_origin, no_commit, head)
+    return run_todo(repo, items, record_origin, no_commit, head, name)
+
+
+@command("cherry-pick")
+def cmd_cherry_pick(args):
+    return _sequencer_command(args, "pick")
+
+
+@command("revert")
+def cmd_revert(args):
+    return _sequencer_command(args, "revert")
 
 
 def continue_commit(repo) -> int:
-    """Commit the resolved pick: the original author, the MERGE_MSG message
-    with comment lines stripped."""
-    oid = (repo.gitdir / "CHERRY_PICK_HEAD").read_text().strip()
-    original = Commit.parse(repo.odb.read(oid)[1])
-    raw = (repo.gitdir / "MERGE_MSG").read_bytes() if (repo.gitdir / "MERGE_MSG").is_file() else original.message
+    """Commit the resolved pick or revert: MERGE_MSG with comment lines
+    stripped; a pick keeps its original author, a revert gets the user."""
+    from pygit.ident import ident
+    pick_head = repo.gitdir / "CHERRY_PICK_HEAD"
+    if pick_head.is_file():
+        original = Commit.parse(repo.odb.read(pick_head.read_text().strip())[1])
+        author, reflog, default = original.author, "cherry-pick", original.message
+    else:
+        author, reflog, default = ident(repo, "author"), "revert", b""
+    raw = (repo.gitdir / "MERGE_MSG").read_bytes() if (repo.gitdir / "MERGE_MSG").is_file() else default
     head, _ = Refs(repo).resolve("HEAD")
     tree = Index.read(repo).write_tree(repo.odb)
-    msg = cleanup_message(raw, "strip")
-    _commit(repo, head, tree, original, msg)
-    _remove(repo, "CHERRY_PICK_HEAD", "MERGE_MSG")
+    if head and tree == Commit.parse(repo.odb.read(head)[1]).tree:
+        # Nothing to commit: git shows the status and stops.
+        from pygit.commands.porcelain import long_status
+        from pygit.pathspec import cwd_prefix
+        from pygit.status import compute
+        out(long_status(repo, compute(repo), cwd_prefix(repo)))
+        return 1
+    _commit(repo, head, tree, author, cleanup_message(raw, "strip"), reflog=reflog,
+            date_interesting=pick_head.is_file())
+    _remove(repo, "CHERRY_PICK_HEAD", "REVERT_HEAD", "MERGE_MSG")
     return 0
+
+

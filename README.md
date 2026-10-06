@@ -70,7 +70,8 @@ tool writes are verified and indexed by the other.
   (`-p`, `--diff3`, `--ours`/`--theirs`/`--union`, `-L`), `merge`
   (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
   commits, conflicts, `--abort`, `--continue`), `cherry-pick` (`-x`, `-n`,
-  several commits, `--continue`/`--skip`/`--abort`/`--quit`), `stash`
+  several commits, `--continue`/`--skip`/`--abort`/`--quit`), `revert`
+  (the same options except `-x`), `stash`
   (push/save, list, show, apply, pop, drop, clear), `rebase` (`--onto`,
   `--continue`/`--skip`/`--abort`/`--quit`), with
   `status`, `diff` and `commit` aware of merges and picks in progress.
@@ -178,7 +179,7 @@ an approximation; random tests compare the results with git.
   `--autosquash`, `--exec`), does not drop commits whose patch is already
   upstream, and never opens an editor; `stash` has no
   `-u`/`--include-untracked`, `--keep-index`, `--patch` or `branch`; and
-  `cherry-pick` has no `-m` (picking merges), `--edit` or `revert`.
+  `cherry-pick` and `revert` have no `-m` (merges) or `--edit`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
   only and no `-X` options. Unusual conflicts (distinct types,
   rename/rename(2to1), directory renames) are reported but not resolved

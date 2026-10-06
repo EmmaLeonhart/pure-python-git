@@ -1085,7 +1085,9 @@ def cmd_reset(args):
         idx.write()
         if not quiet:
             _report_unstaged(repo)
-    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"):
+    # remove_branch_state(): reset ends merges, picks and reverts.
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "CHERRY_PICK_HEAD", "REVERT_HEAD",
+                 "SQUASH_MSG", "AUTO_MERGE"):
         try:
             (repo.gitdir / name).unlink()
         except FileNotFoundError:

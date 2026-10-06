@@ -127,7 +127,8 @@ def cmd_commit(args):
         raw = Commit.parse(repo.odb.read(revparse.resolve(repo, a.reuse))[1]).message
     elif a.amend:
         raw = old.message
-    elif (merge_heads or picked) and (repo.gitdir / "MERGE_MSG").is_file():
+    elif (merge_heads or picked or (repo.gitdir / "REVERT_HEAD").is_file()) \
+            and (repo.gitdir / "MERGE_MSG").is_file():
         raw = (repo.gitdir / "MERGE_MSG").read_bytes()
     else:
         raise GitError("pygit commit needs a message (-m or -F); it does not open an editor")
@@ -194,7 +195,7 @@ def cmd_commit(args):
         reflog = "commit: "
     refs.update("HEAD", oid, reflog + subj.decode("utf-8", "replace"))
     idx.write()
-    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "SQUASH_MSG", "CHERRY_PICK_HEAD"):
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "SQUASH_MSG", "CHERRY_PICK_HEAD", "REVERT_HEAD"):
         try:
             (repo.gitdir / name).unlink()
         except FileNotFoundError:

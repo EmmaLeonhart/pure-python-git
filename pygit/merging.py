@@ -11,6 +11,16 @@ def in_merge(repo) -> bool:
 def merge_state_lines(repo, st) -> list[bytes]:
     """show_merge_in_progress / show_cherry_pick_in_progress: the paragraph
     after the branch line."""
+    revert = repo.gitdir / "REVERT_HEAD"
+    if revert.is_file():
+        from pygit import revparse
+        short = revparse.short_id(repo, revert.read_text().strip())
+        lines = [f"You are currently reverting commit {short}.\n".encode()]
+        lines.append(b'  (fix conflicts and run "git revert --continue")\n' if st.unmerged
+                     else b'  (all conflicts fixed: run "git revert --continue")\n')
+        lines += [b'  (use "git revert --skip" to skip this patch)\n',
+                  b'  (use "git revert --abort" to cancel the revert operation)\n', b"\n"]
+        return lines
     pick = repo.gitdir / "CHERRY_PICK_HEAD"
     if pick.is_file() or (repo.gitdir / "sequencer").is_dir() and not (repo.gitdir / "MERGE_HEAD").is_file():
         from pygit import revparse

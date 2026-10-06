@@ -193,3 +193,15 @@ milestones.
   step became `apply_commit`, shared by both. Note for tests: git's
   `rebase --continue` opens an editor, so that test sets `GIT_EDITOR=true`.
   The history-editing item of todo.md is done. 115 tests pass.
+- 09:49 PST: **`revert`** on the cherry-pick machinery (`apply_commit`
+  with `reverse=True`; the sequencer now handles `pick` and `revert`
+  entries): git's message, `-n` (which, unlike cherry-pick, records
+  REVERT_HEAD), the empty case (status, exit 1), conflicts with
+  REVERT_HEAD and git's hints, `--continue` (no commit when nothing
+  changed), `--skip`, `--abort`, several commits, the status paragraph,
+  and `commit` concluding a revert. `reset` now also clears
+  CHERRY_PICK_HEAD/REVERT_HEAD/SQUASH_MSG/AUTO_MERGE as git does.
+  `tests/test_revert.py` (3 tests) and the cherry-pick tests pass. **The
+  full suite has not run on this change:** Claude Code stopped the run
+  because the machine was critically low on memory, and asks not to
+  restart it unprompted; it is the first item in queue.md.

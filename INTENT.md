@@ -74,6 +74,13 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
   that, todo.md holds only pack-fidelity items, which matter less for
   ordinary use.
 
+- **Full test run: BLOCKED-ON-USER-ACTION.** At about 09:40 PST Claude Code
+  stopped the full suite because the machine was critically low on memory
+  (not caused by the tests) and asked not to restart it unprompted. The
+  `revert` commit (09:49) is pushed with only its own tests and the
+  cherry-pick tests run. Unblock: the user says memory is free, then rerun
+  `python -m unittest discover -s tests`.
+
 ## Open questions
 
 - None blocking. Exact CLI coverage per command (which flags) is decided as
