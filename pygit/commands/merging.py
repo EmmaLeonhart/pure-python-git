@@ -301,53 +301,14 @@ def cmd_merge(args):
     merger = merge_ort.Merger(repo, "HEAD", label, ancestor, style=style)
     res = merger.merge_trees(base_tree, head_c.tree, theirs_c.tree)
 
-    # Apply to the index and work tree; refuse if local changes are in the way.
-    from pygit import worktree
-    from pygit.checkout import conflict_message, remove_file, write_file
-    from pygit.index import IndexEntry
-    result_paths = {p for p, s in res.entries}
-    to_write, to_remove = [], []
-    for p in sorted(result_paths | set(head_map)):
-        if p in res.worktree:
-            to_write.append(p)
-        elif (p, 0) in res.entries:
-            if res.entries[(p, 0)] != head_map.get(p):
-                to_write.append(p)
-        elif p in head_map and p not in result_paths:
-            to_remove.append(p)
-    local, untracked = [], []
-    for p in to_write + to_remove:
-        e = idx.get(p)
-        st = worktree.lstat(repo, p)
-        if e is not None:
-            if st is None or worktree.is_modified(repo, e, st):
-                local.append(p)
-        elif st is not None and not (worktree.fs_path(repo, p).is_dir()):
-            untracked.append(p)
-    if local or untracked:
-        err(conflict_message(sorted(local), sorted(untracked), "merge", "merge") +
-            "Merge with strategy ort failed.\n")
+    from pygit.checkout import conflict_message
+    applied = apply_result(repo, idx, head_map, res)
+    if isinstance(applied, tuple):
+        local, untracked = applied
+        err(conflict_message(local, untracked, "merge", "merge") + "Merge with strategy ort failed.\n")
         return 2
+    new_idx = applied
     _write_state(repo, "ORIG_HEAD", (head + "\n").encode())
-    new_idx = Index(idx.path)
-    for (p, s), (m, o) in res.entries.items():
-        old = idx.get(p)
-        if s == 0 and old is not None and old.oid == o and old.mode == m:
-            new_idx.entries[(p, 0)] = old
-        else:
-            new_idx.entries[(p, s)] = IndexEntry(path=p, oid=o, mode=m, stage=s)
-    for p in to_remove:
-        remove_file(repo, p)
-    for p in to_write:
-        if p in res.worktree:
-            mode, data = res.worktree[p]
-            oid = repo.odb.write(b"blob", data)
-            write_file(repo, p, mode, oid)
-        else:
-            mode, oid = res.entries[(p, 0)]
-            st = write_file(repo, p, mode, oid)
-            new_idx.entries[(p, 0)].set_stat(st)
-    new_idx.write()
     for line in res.sorted_messages():
         out(line.encode() + b"\n")
     msg = message or f"Merge {what}" + ("" if branch in (None, "master", "main") else f" into {branch}")
@@ -376,6 +337,62 @@ def cmd_merge(args):
     if stat:
         out(_stat_between(repo, head_c.tree, tree))
     return 0
+
+
+def apply_result(repo, idx, head_map: dict, res):
+    """Write a tree-merge result into the index and work tree.
+
+    Returns the new index, or (local changes, untracked files) that are in
+    the way, in which case nothing has been touched.
+    """
+    from pygit import worktree
+    from pygit.checkout import remove_file, write_file
+    from pygit.index import Index, IndexEntry
+    result_paths = {p for p, s in res.entries}
+    to_write, to_remove = [], []
+    for p in sorted(result_paths | set(head_map)):
+        if p in res.worktree:
+            to_write.append(p)
+        elif (p, 0) in res.entries:
+            if res.entries[(p, 0)] != head_map.get(p):
+                to_write.append(p)
+        elif p in head_map and p not in result_paths:
+            to_remove.append(p)
+    local, untracked = [], []
+    for p in to_write + to_remove:
+        e = idx.get(p)
+        st = worktree.lstat(repo, p)
+        if e is not None:
+            if st is None or worktree.is_modified(repo, e, st):
+                local.append(p)
+        elif st is not None and not worktree.fs_path(repo, p).is_dir():
+            untracked.append(p)
+    if local or untracked:
+        return sorted(local), sorted(untracked)
+    new_idx = Index(idx.path)
+    for (p, s), (m, o) in res.entries.items():
+        old = idx.get(p)
+        if s == 0 and old is not None and old.oid == o and old.mode == m:
+            new_idx.entries[(p, 0)] = old
+        else:
+            new_idx.entries[(p, s)] = IndexEntry(path=p, oid=o, mode=m, stage=s)
+    # Paths the merge did not touch keep their (possibly dirty) index state.
+    for e in idx.sorted_entries():
+        if e.path not in result_paths and e.path not in head_map:
+            new_idx.entries[(e.path, e.stage)] = e
+    for p in to_remove:
+        remove_file(repo, p)
+    for p in to_write:
+        if p in res.worktree:
+            mode, data = res.worktree[p]
+            oid = repo.odb.write(b"blob", data)
+            write_file(repo, p, mode, oid)
+        else:
+            mode, oid = res.entries[(p, 0)]
+            st = write_file(repo, p, mode, oid)
+            new_idx.entries[(p, 0)].set_stat(st)
+    new_idx.write()
+    return new_idx
 
 
 def _abort(repo) -> None:

@@ -163,3 +163,14 @@ milestones.
   bundled `-SW`), without overlay: tracked paths missing from the source
   leave the index (`--staged`) and the work tree (`--worktree`). Twin tests
   against git. 102 tests pass.
+- 08:11 PST: **`cherry-pick`** (`pygit/commands/sequencing.py`): a tree
+  merge with the commit's parent as base and git's labels, the original
+  author and message, `-x`, `-n`, the "now empty" stop, conflicts with
+  CHERRY_PICK_HEAD and MERGE_MSG, `--continue` (comment lines stripped),
+  `--skip`, `--abort`, `--quit`, multi-commit picks with git's
+  `.git/sequencer` (head, todo, abort-safety), and git's refusals. `commit`
+  concludes a pick with its author; `status` shows the cherry-pick
+  paragraph. The merge command's apply step became `apply_result`, shared
+  with cherry-pick. 107 tests pass. (One earlier run was cut off by its
+  timeout while other workloads slowed the machine; the rerun took 8
+  minutes.)

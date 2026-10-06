@@ -4,12 +4,33 @@ from __future__ import annotations
 
 
 def in_merge(repo) -> bool:
-    return (repo.gitdir / "MERGE_HEAD").is_file()
+    """A merge or cherry-pick is in progress (git prints no unstage hints then)."""
+    return (repo.gitdir / "MERGE_HEAD").is_file() or (repo.gitdir / "CHERRY_PICK_HEAD").is_file()
 
 
 def merge_state_lines(repo, st) -> list[bytes]:
-    """show_merge_in_progress: the paragraph after the branch line."""
-    if not in_merge(repo):
+    """show_merge_in_progress / show_cherry_pick_in_progress: the paragraph
+    after the branch line."""
+    pick = repo.gitdir / "CHERRY_PICK_HEAD"
+    if pick.is_file() or (repo.gitdir / "sequencer").is_dir() and not (repo.gitdir / "MERGE_HEAD").is_file():
+        from pygit import revparse
+        lines = []
+        if pick.is_file():
+            short = revparse.short_id(repo, pick.read_text().strip())
+            lines.append(f"You are currently cherry-picking commit {short}.\n".encode())
+        else:
+            lines.append(b"Cherry-pick currently in progress.\n")
+        if st.unmerged:
+            lines.append(b'  (fix conflicts and run "git cherry-pick --continue")\n')
+        elif not pick.is_file():
+            lines.append(b'  (run "git cherry-pick --continue" to continue)\n')
+        else:
+            lines.append(b'  (all conflicts fixed: run "git cherry-pick --continue")\n')
+        lines.append(b'  (use "git cherry-pick --skip" to skip this patch)\n')
+        lines.append(b'  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n')
+        lines.append(b"\n")
+        return lines
+    if not (repo.gitdir / "MERGE_HEAD").is_file():
         return []
     if st.unmerged:
         return [b"You have unmerged paths.\n",

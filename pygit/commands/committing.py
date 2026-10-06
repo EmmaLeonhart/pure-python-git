@@ -103,6 +103,11 @@ def cmd_commit(args):
     mh = repo.gitdir / "MERGE_HEAD"
     if mh.is_file():
         merge_heads = [l.strip() for l in mh.read_text().splitlines() if l.strip()]
+    # Concluding a cherry-pick: its author, and MERGE_MSG as the message.
+    picked = None
+    cp = repo.gitdir / "CHERRY_PICK_HEAD"
+    if cp.is_file() and not a.amend:
+        picked = Commit.parse(repo.odb.read(cp.read_text().strip())[1])
 
     old = None
     if a.amend:
@@ -122,7 +127,7 @@ def cmd_commit(args):
         raw = Commit.parse(repo.odb.read(revparse.resolve(repo, a.reuse))[1]).message
     elif a.amend:
         raw = old.message
-    elif merge_heads and (repo.gitdir / "MERGE_MSG").is_file():
+    elif (merge_heads or picked) and (repo.gitdir / "MERGE_MSG").is_file():
         raw = (repo.gitdir / "MERGE_MSG").read_bytes()
     else:
         raise GitError("pygit commit needs a message (-m or -F); it does not open an editor")
@@ -161,6 +166,8 @@ def cmd_commit(args):
         return 1
 
     author = old.author if a.amend and not a.author else ident(repo, "author")
+    if picked is not None and not a.author:
+        author = picked.author
     if a.author:
         name, _, rest = a.author.partition("<")
         if not rest:
@@ -187,7 +194,7 @@ def cmd_commit(args):
         reflog = "commit: "
     refs.update("HEAD", oid, reflog + subj.decode("utf-8", "replace"))
     idx.write()
-    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "SQUASH_MSG"):
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "SQUASH_MSG", "CHERRY_PICK_HEAD"):
         try:
             (repo.gitdir / name).unlink()
         except FileNotFoundError:
@@ -198,7 +205,7 @@ def cmd_commit(args):
         else:
             label = b"detached HEAD"
         out(commit_summary(repo, oid, c, label, root=not parents,
-                           date_interesting=bool(a.amend or a.date or a.reuse)))
+                           date_interesting=bool(a.amend or a.date or a.reuse or picked)))
     return 0
 
 

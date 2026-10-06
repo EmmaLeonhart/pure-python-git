@@ -5,10 +5,6 @@ in the same commit.
 
 ## History commands, from todo.md
 
-2. `cherry-pick <commit>...`: a merge with the commit's parent as base,
-   the original author and message, `-x`, `-n`, conflicts with
-   CHERRY_PICK_HEAD, `--continue`, `--abort`, `--skip`; status lines
-   during a cherry-pick.
 3. `stash` (`push`/no subcommand, `-m`, `list`, `show`, `pop`, `apply`,
    `drop`, `clear`): stash commits shaped as git makes them (index and
    work-tree commits, refs/stash with its reflog), so git can read them.

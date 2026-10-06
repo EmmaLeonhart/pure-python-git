@@ -69,8 +69,9 @@ tool writes are verified and indexed by the other.
 - Stage 4: `merge-base` (`--all`, `--is-ancestor`), `merge-file`
   (`-p`, `--diff3`, `--ours`/`--theirs`/`--union`, `-L`), `merge`
   (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
-  commits, conflicts, `--abort`, `--continue`), with `status`, `diff` and
-  `commit` aware of merges in progress.
+  commits, conflicts, `--abort`, `--continue`), `cherry-pick` (`-x`, `-n`,
+  several commits, `--continue`/`--skip`/`--abort`/`--quit`), with
+  `status`, `diff` and `commit` aware of merges and picks in progress.
 - Stage 5: `verify-pack`, `index-pack`, `pack-objects`, `count-objects`,
   `pack-refs`, `prune`, `gc`, `clone` (`--bare`, `-b`, `-o`), `fetch`
   (`--prune`, explicit refs), `push` (refspecs, `--force`/`+`, `--delete`,
@@ -171,8 +172,8 @@ an approximation; random tests compare the results with git.
   `--combined`/`-m`/`--diff-merges` choice, and `log` shows no diffs for
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
-  `--overlay` options; `stash`, `rebase` and `cherry-pick` are not
-  implemented yet.
+  `--overlay` options; `stash` and `rebase` are not implemented yet, and
+  `cherry-pick` has no `-m` (picking merges), `--edit` or `revert`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
   only and no `-X` options. Unusual conflicts (distinct types,
   rename/rename(2to1), directory renames) are reported but not resolved

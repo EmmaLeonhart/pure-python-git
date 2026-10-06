@@ -15,7 +15,8 @@ def snapshot(tc, d):
             dirnames.remove(".git")
         for f in filenames:
             p = os.path.join(dirpath, f)
-            files[os.path.relpath(p, d).replace("\\", "/")] = open(p, "rb").read()
+            with open(p, "rb") as fh:
+                files[os.path.relpath(p, d).replace("\\", "/")] = fh.read()
     return (tc.git_out("symbolic-ref", "-q", "HEAD", cwd=d, check=False),
             tc.git_out("ls-files", "-s", cwd=d),
             files,
