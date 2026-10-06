@@ -176,8 +176,8 @@ an approximation; random tests compare the results with git.
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
   `--overlay` options; `rebase` is non-interactive only (no `-i`,
-  `--autosquash`, `--exec`), does not drop commits whose patch is already
-  upstream, and never opens an editor; `stash` has no
+  `--autosquash`, `--exec`, `--reapply-cherry-picks`) and never opens an
+  editor; `stash` has no
   `-u`/`--include-untracked`, `--keep-index`, `--patch` or `branch`; and
   `cherry-pick` and `revert` have no `-m` (merges) or `--edit`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy

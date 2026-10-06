@@ -65,6 +65,30 @@ class TestRebase(Stage3Twin):
         self.step("rebase", "--skip")
         self.step("log", "--format=%H %s")
 
+    def test_skips_already_applied(self):
+        """A commit whose change (whitespace aside) is upstream is dropped."""
+        self.write2("f", "1\n2\n3\n")
+        self.git2("add", ".")
+        self.git2("commit", "-q", "-m", "base")
+        self.git2("checkout", "-q", "-b", "topic")
+        self.write2("a", "a\n")
+        self.git2("add", "a")
+        self.git2("commit", "-q", "-m", "add a")
+        self.write2("f", "1\n2  changed\n3\n")
+        self.git2("commit", "-q", "-am", "change f")
+        self.write2("g", "no newline at end")
+        self.git2("add", "g")
+        self.git2("commit", "-q", "-m", "add g")
+        self.git2("checkout", "-q", "main")
+        self.write2("f", "1\n2 changed\n3\n")
+        self.git2("commit", "-q", "-am", "same change, other spacing")
+        self.write2("g", "no newline at end")
+        self.git2("add", "g")
+        self.git2("commit", "-q", "-m", "g upstream too")
+        self.git2("checkout", "-q", "topic")
+        self.step("rebase", "main")
+        self.step("log", "--format=%H %s")
+
     def test_refusals_and_onto(self):
         self.setup()
         self.write2("a", "dirty\n")

@@ -205,3 +205,13 @@ milestones.
   full suite has not run on this change:** Claude Code stopped the run
   because the machine was critically low on memory, and asks not to
   restart it unprompted; it is the first item in queue.md.
+- 10:25 PST: **rebase skips commits already upstream.** `pygit/patchid.py`
+  ports diff.c's in-process patch id (whitespace stripped, no hunk
+  headers, three lines of context, no renames, blob ids for binaries);
+  rebase drops topic commits whose id matches an upstream commit, with
+  git's "skipped previously applied commit" warning and hints. Checked
+  against `git patch-id` (12 of 13 text commits identical; the 13th is a
+  mode-only commit, where `git patch-id` works from patch text without
+  `---`/`+++` lines and so differs by design; equality between commits,
+  which is what rebase uses, is unaffected). New rebase test passes, as
+  do the other 5. The full suite still waits on memory (queue item 1).

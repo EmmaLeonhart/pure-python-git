@@ -241,6 +241,17 @@ def _start(repo, upstream: str, onto_spec: str | None, branch_arg: str | None) -
         return _finish(repo)
     picks = [o for o in reversed(list(walk(repo, [head], [up])))
              if len(Commit.parse(repo.odb.read(o)[1]).parents) <= 1]
+    # Commits whose change is already upstream (same patch id) are skipped.
+    from pygit.patchid import patch_id
+    upstream_ids = {patch_id(repo, o) for o in walk(repo, [up], [head])} - {None}
+    if upstream_ids:
+        skipped = [o for o in picks if patch_id(repo, o) in upstream_ids]
+        if skipped:
+            for o in skipped:
+                err(f"warning: skipped previously applied commit {revparse.short_id(repo, o)}\n")
+            err("hint: use --reapply-cherry-picks to include skipped commits\n"
+                "hint: Disable this message with \"git config set advice.skippedCherryPicks false\"\n")
+            picks = [o for o in picks if o not in skipped]
     switch_trees(repo, head_c.tree, onto_c.tree)
     refs.update("HEAD", onto, f"rebase (start): checkout {onto_spec or upstream}", no_deref=True)
     _state(repo).mkdir(parents=True, exist_ok=True)
