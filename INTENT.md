@@ -68,6 +68,11 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
   subdirectories, and `diff`/`log` path arguments from subdirectories.
   The user has not written since the session began. Test runs take 20+
   minutes at the moment because other workloads load the machine.
+- 2026-10-06 08:36 PST: since then, `log -p`/`show`, combined diffs, line
+  endings, `restore`, `cherry-pick` and `stash`, all compared with git
+  (110 tests). Still no message from the user. Next: `rebase`; after
+  that, todo.md holds only pack-fidelity items, which matter less for
+  ordinary use.
 
 ## Open questions
 

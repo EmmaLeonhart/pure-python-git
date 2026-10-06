@@ -55,9 +55,11 @@ def _subject(c: Commit) -> str:
     return split_message(c.message)[0].decode("utf-8", "replace")
 
 
-def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -> int:
-    """Apply one commit on top of HEAD. Returns 0 (picked), 1 (stopped:
-    conflict or empty), raising Fatal when nothing was done."""
+def apply_commit(repo, oid: str, action: str = "cherry-pick"):
+    """Merge one commit's changes onto HEAD (base: its parent) into the
+    index and work tree, printing the merge messages. Returns (merge
+    result, new index, commit, short id, subject, HEAD tree); raises
+    Fatal when nothing was touched."""
     from pygit import merge_ort
     from pygit.checkout import conflict_message
     from pygit.commands.merging import _config_style, apply_result
@@ -71,7 +73,7 @@ def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -
     head_map = head_tree_entries(repo)
     index_map = {e.path: (e.mode, e.oid) for e in idx.sorted_entries()}
     if head_map != index_map:
-        raise Fatal("error: your local changes would be overwritten by cherry-pick.\n"
+        raise Fatal(f"error: your local changes would be overwritten by {action}.\n"
                     "hint: commit your changes or stash them to proceed.\n")
     short = revparse.short_id(repo, oid)
     subject = _subject(c)
@@ -86,6 +88,14 @@ def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -
         raise Fatal(conflict_message(local, untracked, "merge", "merge"))
     for line in res.sorted_messages():
         out(line.encode() + b"\n")
+    return res, applied, c, short, subject, head_tree
+
+
+def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -> int:
+    """Apply one commit on top of HEAD. Returns 0 (picked), 1 (stopped:
+    conflict or empty), raising Fatal when nothing was done."""
+    head, _ = Refs(repo).resolve("HEAD")
+    res, applied, c, short, subject, head_tree = apply_commit(repo, oid)
     message = c.message
     if record_origin:
         message = message.rstrip(b"\n") + b"\n\n(cherry picked from commit " + oid.encode() + b")\n"

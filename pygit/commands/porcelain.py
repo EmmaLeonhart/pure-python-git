@@ -544,7 +544,14 @@ def long_status(repo, st, prefix: bytes, hints: bool = True, show_untracked: boo
     if tracking:
         lines.append(tracking + b"\n")
     from pygit.merging import in_merge, merge_state_lines, resolution_hint
-    lines.extend(merge_state_lines(repo, st))
+    from pygit.commands.rebasing import status_lines as rebase_status
+    rebase = rebase_status(repo, st)
+    if rebase:
+        # A rebase replaces the (detached) branch line and adds its paragraph.
+        lines[0] = rebase[0]
+        lines.extend(rebase[1])
+    else:
+        lines.extend(merge_state_lines(repo, st))
     # During a merge git prints no "to unstage" hints (whence != FROM_COMMIT).
     unstage_hints = hints and not in_merge(repo)
     if not born:

@@ -182,3 +182,14 @@ milestones.
   the other's stash. Apply merges with git's labels, keeps added files
   staged without `--index`, prints the long status (also on conflict, then
   keeps the entry). Revision parsing gained `<ref>@{n}`. 110 tests pass.
+- 09:14 PST: **`rebase`** (non-interactive, `pygit/commands/rebasing.py`):
+  up-to-date and fast-forward cases, `--onto`, picks with git's progress
+  lines and reflog messages, commits that become empty dropped, conflicts
+  stopping with git's `.git/rebase-merge` state (head-name, onto,
+  orig-head, todo, done, msgnum, end, message, author-script,
+  stopped-sha) and REBASE_HEAD, `--continue`, `--skip`, `--abort`,
+  `--quit`, and git's refusals. `status` prints the rebase layout ("interactive
+  rebase in progress; onto ...", done/next commands). Cherry-pick's apply
+  step became `apply_commit`, shared by both. Note for tests: git's
+  `rebase --continue` opens an editor, so that test sets `GIT_EDITOR=true`.
+  The history-editing item of todo.md is done. 115 tests pass.

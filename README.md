@@ -71,7 +71,8 @@ tool writes are verified and indexed by the other.
   (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
   commits, conflicts, `--abort`, `--continue`), `cherry-pick` (`-x`, `-n`,
   several commits, `--continue`/`--skip`/`--abort`/`--quit`), `stash`
-  (push/save, list, show, apply, pop, drop, clear), with
+  (push/save, list, show, apply, pop, drop, clear), `rebase` (`--onto`,
+  `--continue`/`--skip`/`--abort`/`--quit`), with
   `status`, `diff` and `commit` aware of merges and picks in progress.
 - Stage 5: `verify-pack`, `index-pack`, `pack-objects`, `count-objects`,
   `pack-refs`, `prune`, `gc`, `clone` (`--bare`, `-b`, `-o`), `fetch`
@@ -173,7 +174,9 @@ an approximation; random tests compare the results with git.
   `--combined`/`-m`/`--diff-merges` choice, and `log` shows no diffs for
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
-  `--overlay` options; `rebase` is not implemented yet; `stash` has no
+  `--overlay` options; `rebase` is non-interactive only (no `-i`,
+  `--autosquash`, `--exec`), does not drop commits whose patch is already
+  upstream, and never opens an editor; `stash` has no
   `-u`/`--include-untracked`, `--keep-index`, `--patch` or `branch`; and
   `cherry-pick` has no `-m` (picking merges), `--edit` or `revert`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
