@@ -109,18 +109,10 @@ class Refs:
 
     # -- writing -------------------------------------------------------------------
     def _write_locked(self, name: str, content: str) -> None:
+        from pygit.lockfile import write_locked
         path = self._loose_path(name)
         path.parent.mkdir(parents=True, exist_ok=True)
-        lock = path.with_name(path.name + ".lock")
-        try:
-            fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            raise GitError(f"Unable to create '{lock}': File exists.")
-        try:
-            os.write(fd, content.encode())
-        finally:
-            os.close(fd)
-        os.replace(lock, path)
+        write_locked(path, content.encode())
 
     def _log(self, name: str, old: str, new: str, message: str) -> None:
         cfg = self.repo.config

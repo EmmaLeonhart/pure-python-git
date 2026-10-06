@@ -37,6 +37,14 @@ def out(data: bytes) -> None:
     sys.stdout.buffer.write(data)
 
 
+def err(text) -> None:
+    """Write to stderr as bytes (no CRLF translation on Windows)."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.stderr.buffer.write(text if isinstance(text, bytes) else text.encode("utf-8", "surrogateescape"))
+    sys.stderr.buffer.flush()
+
+
 def _load_commands() -> None:
     # Imported for their @command registrations.
     from pygit.commands import plumbing  # noqa: F401
@@ -52,27 +60,26 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     _load_commands()
     if not argv or argv[0] in ("-h", "--help", "help"):
-        sys.stdout.write("usage: python -m pygit <command> [<args>]\n\ncommands:\n")
+        out(b"usage: python -m pygit <command> [<args>]\n\ncommands:\n")
         for name in sorted(COMMANDS):
-            sys.stdout.write(f"   {name}\n")
+            out(f"   {name}\n".encode())
         return 0 if argv else 1
     if argv[0] == "--version":
         from pygit import __version__
-        sys.stdout.write(f"pygit version {__version__}\n")
+        out(f"pygit version {__version__}\n".encode())
         return 0
     name, args = argv[0], argv[1:]
     fn = COMMANDS.get(name)
     if fn is None:
-        sys.stderr.write(f"git: '{name}' is not a git command. See 'python -m pygit --help'.\n")
+        err(f"git: '{name}' is not a git command. See 'python -m pygit --help'.\n")
         return 1
     try:
         rc = fn(args)
     except UsageError as e:
-        sys.stderr.write(f"error: {e.message}\n")
+        err(f"error: {e.message}\n")
         return e.code
     except GitError as e:
-        sys.stdout.flush()
-        sys.stderr.write(f"fatal: {e.message}\n")
+        err(f"fatal: {e.message}\n")
         return e.code
     except BrokenPipeError:
         return 141

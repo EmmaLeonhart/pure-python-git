@@ -23,3 +23,19 @@ milestones.
   paths; `ls-tree -d -r` must still recurse; a missing `<rev>:<path>` dies
   with git's message instead of returning 1; `init` printed `\r\n` on
   Windows. Stage 2 is broken down in queue.md.
+- 02:21 PST: CI on GitHub Actions does not start: the account's billing or
+  spending limit blocks jobs. Recorded in INTENT.md as BLOCKED-ON-USER-ACTION;
+  the suite runs locally on Python 3.13 and 3.11 before each push.
+- 02:36 PST: **stage 2, first half: index, ignore rules, ls-files,
+  write-tree, read-tree, update-index, check-ignore, add, rm, status.**
+  Index v2/v3/v4 reader and v2 writer (`pygit/index.py`), a port of git's
+  wildmatch and gitignore precedence (`pygit/ignore.py`), work-tree walking
+  and racy-clean checks, exact and similarity-based rename detection for
+  status, upstream ahead/behind. 20 new tests compare stdout, stderr, exit
+  codes and resulting index with git. Bugs the comparison found: on Windows
+  `os.open` writes in text mode unless `O_BINARY` is passed, which turned
+  0x0a bytes in the index (and refs) into CRLF (fixed with a shared
+  `lockfile.write_locked`); stderr also went through text mode; Git for
+  Windows records dev/ino/uid/gid as 0 and compares them, so pygit now does
+  the same; long status paragraph spacing, `-uno` wording, `./` for the cwd
+  itself, ignored-directory naming in `add`.
