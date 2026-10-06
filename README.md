@@ -64,7 +64,8 @@ tool writes are verified and indexed by the other.
   (list, `-v`/`-vv`, create, `-d`/`-D`, `-m`, `-c`, upstreams), `tag`
   (lightweight, annotated, `-d`, `-f`, `-l`, `-n`), `checkout` and
   `switch` (branches, `-b`/`-B`/`-c`, detached HEAD, paths), `reset`
-  (`--soft`, `--mixed`, `--hard`, paths).
+  (`--soft`, `--mixed`, `--hard`, paths), `restore` (`--source`,
+  `--staged`, `--worktree`).
 - Stage 4: `merge-base` (`--all`, `--is-ancestor`), `merge-file`
   (`-p`, `--diff3`, `--ours`/`--theirs`/`--union`, `-L`), `merge`
   (fast-forward, `--ff-only`, `--no-ff`, `--no-commit`, `-m`, merge
@@ -170,8 +171,8 @@ an approximation; random tests compare the results with git.
   `--combined`/`-m`/`--diff-merges` choice, and `log` shows no diffs for
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
-  `--overlay` options; `restore`, `stash`, `rebase` and `cherry-pick` are
-  not implemented.
+  `--overlay` options; `stash`, `rebase` and `cherry-pick` are not
+  implemented yet.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
   only and no `-X` options. Unusual conflicts (distinct types,
   rename/rename(2to1), directory renames) are reported but not resolved

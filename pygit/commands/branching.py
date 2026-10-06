@@ -903,6 +903,97 @@ def cmd_switch(args):
     return do_switch(repo, ref, oid, label, None, False, name, force, quiet)
 
 
+# -- restore ---------------------------------------------------------------------------
+
+@command("restore")
+def cmd_restore(args):
+    """`restore [--source=<tree>] [--staged] [--worktree] <paths>`: no overlay,
+    so paths missing from the source are removed."""
+    from pygit.checkout import remove_file, tree_map
+    repo = find_repo()
+    if repo.worktree is None:
+        raise GitError("this operation must be run in a work tree")
+    source = None
+    staged = worktree_flag = False
+    paths = []
+    expanded = []
+    for arg in args:  # bundled short flags: -SW
+        if len(arg) > 2 and arg[0] == "-" and arg[1] != "-" and set(arg[1:]) <= set("SWq"):
+            expanded += [f"-{c}" for c in arg[1:]]
+        else:
+            expanded.append(arg)
+    it = iter(expanded)
+    for arg in it:
+        if arg.startswith("--source="):
+            source = arg.split("=", 1)[1]
+        elif arg in ("-s", "--source"):
+            source = next(it)
+        elif arg in ("-S", "--staged"):
+            staged = True
+        elif arg in ("-W", "--worktree"):
+            worktree_flag = True
+        elif arg in ("-q", "--quiet", "--"):
+            continue
+        elif arg.startswith("-"):
+            raise GitError(f"unknown option '{arg}'")
+        else:
+            paths.append(arg)
+    if not staged:
+        worktree_flag = True
+    if not paths:
+        raise GitError("you must specify path(s) to restore")
+    if source is None and staged:
+        source = "HEAD"
+    spec = Pathspec(repo, paths)
+    idx = Index.read(repo)
+    if source is None:
+        # Work tree from the index.
+        entries = {e.path: (e.mode, e.oid) for e in idx.sorted_entries() if not e.stage and spec.matches(e.path)}
+        unmerged = sorted({p for p in idx.conflicted_paths() if spec.matches(p)})
+        if unmerged:
+            for p in unmerged:
+                err(f"error: path '{os.fsdecode(p)}' is unmerged\n")
+            return 1
+    else:
+        try:
+            tree = revparse.peel(repo, revparse.resolve(repo, source), b"tree")
+        except GitError:
+            raise GitError(f"could not resolve {source}")
+        entries = {p: v for p, v in tree_map(repo.odb, tree).items() if spec.matches(p)}
+    known = set(entries) | {e.path for e in idx.sorted_entries() if spec.matches(e.path)}
+    for n, item in enumerate(spec.items):
+        if not any(Pathspec._item_matches(item, p) for p in known):
+            err(f"error: pathspec '{spec.args[n]}' did not match any file(s) known to git\n")
+            return 1
+    # Tracked paths absent from the source leave the work tree (no overlay);
+    # collected before --staged drops them from the index.
+    tracked = {e.path for e in idx.sorted_entries() if spec.matches(e.path)} if source is not None else set()
+    if staged:
+        for e in list(idx.sorted_entries()):
+            if spec.matches(e.path) and e.path not in entries:
+                idx.remove(e.path)
+        for p, (m, o) in entries.items():
+            cur = idx.get(p)
+            if cur is None or (cur.mode, cur.oid) != (m, o) or any(idx.get(p, s) for s in (1, 2, 3)):
+                idx.add(IndexEntry(path=p, oid=o, mode=m))
+    if worktree_flag:
+        # Without --staged the index keeps such entries; only the file goes.
+        for p in sorted(tracked - set(entries)):
+            remove_file(repo, p)
+        for p, (m, o) in sorted(entries.items()):
+            st = worktree.lstat(repo, p)
+            cur = idx.get(p)
+            if st is not None and cur is not None and (cur.mode, cur.oid) == (m, o) \
+                    and not worktree.is_modified(repo, cur, st):
+                continue
+            st = write_file(repo, p, m, o)
+            cur = idx.get(p)
+            if cur is not None and (cur.mode, cur.oid) == (m, o):
+                cur.set_stat(st)
+    idx.write()
+    return 0
+
+
 # -- reset -----------------------------------------------------------------------------
 
 @command("reset")

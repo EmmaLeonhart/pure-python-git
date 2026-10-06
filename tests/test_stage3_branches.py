@@ -171,6 +171,29 @@ class TestCheckout(Stage3Twin):
         self.step("checkout", "dir")
 
 
+class TestRestore(Stage3Twin):
+    def test_restore(self):
+        self.base_history()
+        self.write2("a", "dirty\n")
+        for d in (self.g, self.p):
+            os.remove(d / "b")
+        self.step("restore", "a", "b")
+        self.write2("a", "staged\n")
+        self.git2("add", "a")
+        self.step("restore", "--staged", "a")
+        self.step("restore", "a")
+        self.step("restore", "nope")
+        self.step("restore")
+        self.write2("a", "z\n")
+        self.git2("add", "a")
+        self.write2("a", "w\n")
+        self.step("restore", "--staged", "--worktree", "a")
+        self.step("restore", "--source=HEAD~1", "a")
+        self.step("restore", "--source=HEAD~1", "dir")
+        self.step("restore", "--source=HEAD~1", "--staged", "dir")
+        self.step("restore", "-s", "HEAD", "-SW", ".")
+
+
 class TestReset(Stage3Twin):
     def test_modes(self):
         self.base_history()

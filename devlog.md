@@ -159,3 +159,7 @@ milestones.
   clone). `tests/test_eol.py` compares attributes, stored blobs, status,
   diff and checkout bytes with git for autocrlf false/true/input and
   core.eol=crlf. 101 tests pass.
+- 07:30 PST: **`restore`** (`--source`, `--staged`, `--worktree`, both,
+  bundled `-SW`), without overlay: tracked paths missing from the source
+  leave the index (`--staged`) and the work tree (`--worktree`). Twin tests
+  against git. 102 tests pass.
