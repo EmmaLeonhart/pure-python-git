@@ -216,6 +216,19 @@ class TestLog(GitTestCase):
             with self.subTest(args=args):
                 self.assertSame(*args)
 
+    def test_diffs_in_log_and_show(self):
+        self.git("tag", "-a", "v1", "-m", "tag message", "HEAD~2")
+        for args in (["log", "-p"], ["log", "--oneline", "-p"], ["log", "--stat"], ["log", "--oneline", "--stat"],
+                     ["log", "--format=%s", "-p"], ["log", "--pretty=format:%s", "--stat"],
+                     ["log", "--name-status"], ["log", "--name-only"], ["log", "--numstat"], ["log", "--shortstat"],
+                     ["log", "-p", "--stat"], ["log", "--format=%s", "-p", "--stat"], ["log", "--summary"],
+                     ["show"], ["show", "--stat"], ["show", "--oneline"], ["show", "--oneline", "--stat"],
+                     ["show", "--name-status"], ["show", "-p", "--stat"], ["show", "-s"], ["show", "HEAD~2"],
+                     ["show", "--stat", "HEAD~2"], ["show", "v1"], ["show", "HEAD^{tree}"], ["show", "HEAD:f"],
+                     ["show", "HEAD~1", "HEAD~2"], ["show", "nope"]):
+            with self.subTest(args=args):
+                self.assertSame(*args)
+
     def test_unborn(self):
         empty = self.tmp / "empty"
         self.git("init", "-q", str(empty))

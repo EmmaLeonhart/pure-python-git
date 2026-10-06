@@ -53,8 +53,10 @@ tool writes are verified and indexed by the other.
   `-u`, `--ignored`), `commit` (`-m`, `-F`, `-a`, `--amend`,
   `--allow-empty`, `--author`, `--date`, `--cleanup`), `log` (medium,
   oneline, short, full, fuller, raw, `--format` placeholders, `-n`,
-  `--reverse`, `--first-parent`, ranges `a..b`, `a...b`, `^a`, `-- paths`),
-  plus `ls-files`, `write-tree`, `read-tree`, `update-index`,
+  `--reverse`, `--first-parent`, ranges `a..b`, `a...b`, `^a`, `-- paths`,
+  and per-commit diffs: `-p`, `--stat`, `--numstat`, `--shortstat`,
+  `--name-only`, `--name-status`, `--summary`), `show` (commits, tags,
+  trees, blobs), plus `ls-files`, `write-tree`, `read-tree`, `update-index`,
   `check-ignore`.
 - Stage 3: `diff` (work tree, `--cached`, commits, `a..b`, `a...b`;
   patches, `--stat`, `--numstat`, `--shortstat`, `--name-only`,
@@ -148,8 +150,10 @@ an approximation; random tests compare the results with git.
 - No editor, hooks, signing, pager or colour anywhere: `commit`, `tag -a`
   and `merge` need their message on the command line or in a file.
 - `commit` takes no pathspecs.
-- `log` has no `--graph`, decorations, `-p`/`--stat`, relative dates or
-  `--follow`; path limiting implements git's default simplification only.
+- `log` has no `--graph`, decorations, relative dates or `--follow`; path
+  limiting implements git's default simplification only.
+- `show` of a merge whose result differs from every parent (an "evil"
+  merge or a conflict resolution) does not print the combined patch.
 - Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
   written.
 - `diff` has no `--color`, word diff, `--relative`, `-M<n>` thresholds,

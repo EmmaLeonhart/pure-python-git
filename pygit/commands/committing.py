@@ -238,6 +238,8 @@ def cmd_log(args):
     tformat = True
     reverse = first_parent = False
     abbrev_commit = False
+    diff_formats = []
+    renames = repo.config.get_bool("diff.renames", True)
     revs = []
     paths = []
     it = iter(args)
@@ -282,7 +284,13 @@ def cmd_log(args):
             abbrev_commit = True
         elif arg == "--no-abbrev-commit":
             abbrev_commit = False
-        elif arg in ("--no-decorate", "--no-color", "--decorate=no", "--no-merges-placeholder"):
+        elif arg in DIFF_FORMAT_FLAGS:
+            diff_formats.append(DIFF_FORMAT_FLAGS[arg])
+        elif arg in ("-s", "--no-patch"):
+            diff_formats.clear()
+        elif arg == "--no-renames":
+            renames = False
+        elif arg in ("--no-decorate", "--no-color", "--decorate=no"):
             pass
         elif arg.startswith("-"):
             raise GitError(f"unrecognized argument: {arg}")
@@ -332,46 +340,207 @@ def cmd_log(args):
         oids = oids[:max_count]
     if reverse:
         oids.reverse()
+    view = LogView(repo, cache, fmt, user_format, tformat, abbrev_commit, diff_formats, renames)
+    out(view.render(oids))
+    return 0
 
-    abbrevs = {}
 
-    def abbrev(o):
-        if o not in abbrevs:
-            abbrevs[o] = revparse.short_id(repo, o)
-        return abbrevs[o]
+DIFF_FORMAT_FLAGS = {"-p": "patch", "-u": "patch", "--patch": "patch", "--stat": "stat",
+                     "--numstat": "numstat", "--shortstat": "shortstat", "--name-only": "name-only",
+                     "--name-status": "name-status", "--summary": "summary"}
 
-    chunks = []
-    for oid in oids:
-        c = cache.get(oid)
-        shown = abbrev(oid) if abbrev_commit else oid
+
+class LogView:
+    """Commit entries as `git log` prints them, optionally with diffs
+    against the first parent (merges get none, as in `git log -p`)."""
+
+    def __init__(self, repo, cache, fmt, user_format, tformat, abbrev_commit, diff_formats, renames=True):
+        self.repo, self.cache = repo, cache
+        self.fmt, self.user_format, self.tformat = fmt, user_format, tformat
+        self.abbrev_commit = abbrev_commit
+        self.diff_formats = diff_formats
+        self.renames = renames
+        self._abbrevs = {}
+
+    def abbrev(self, o):
+        if o not in self._abbrevs:
+            self._abbrevs[o] = revparse.short_id(self.repo, o)
+        return self._abbrevs[o]
+
+    def header(self, oid) -> bytes:
+        c = self.cache.get(oid)
+        shown = self.abbrev(oid) if self.abbrev_commit else oid
+        fmt = self.fmt
         if fmt == "oneline":
             subj, _ = split_message(c.message)
-            chunks.append(shown.encode() + b" " + subj + b"\n")
-        elif fmt == "user":
-            chunks.append(format_placeholders(user_format.encode(), oid, c, abbrev))
-        elif fmt == "short":
-            chunks.append(short(repo, shown, c, abbrev))
-        elif fmt in ("full", "fuller"):
-            chunks.append(full(repo, shown, c, abbrev, fuller=(fmt == "fuller")))
-        elif fmt == "raw":
-            raw = repo.odb.read(oid)[1]
+            return shown.encode() + b" " + subj + b"\n"
+        if fmt == "user":
+            return format_placeholders(self.user_format.encode(), oid, c, self.abbrev)
+        if fmt == "short":
+            return short(self.repo, shown, c, self.abbrev)
+        if fmt in ("full", "fuller"):
+            return full(self.repo, shown, c, self.abbrev, fuller=(fmt == "fuller"))
+        if fmt == "raw":
+            raw = self.repo.odb.read(oid)[1]
             headers, _, msg = raw.partition(b"\n\n")
             from pygit.pretty import indented_message
-            chunks.append(b"commit " + oid.encode() + b"\n" + headers + b"\n\n" +
-                          indented_message(msg, expand_tabs=False))
+            return (b"commit " + oid.encode() + b"\n" + headers + b"\n\n" +
+                    indented_message(msg, expand_tabs=False))
+        return medium(self.repo, shown, c, self.abbrev)
+
+    def diff(self, oid):
+        """The diff text, b"" if files changed but nothing is printed
+        (e.g. --summary of a plain edit), or None if nothing changed."""
+        if not self.diff_formats:
+            return None
+        c = self.cache.get(oid)
+        formats = self.diff_formats
+        if len(c.parents) > 1:
+            if not self.combined:
+                return None
+            # Combined mode: the stat-like parts are against the first
+            # parent; the dense combined patch of a clean merge is empty
+            # (evil merges are not rendered: see README limits).
+            formats = [f for f in formats if f not in ("patch", "name-only", "name-status")]
+            if not formats:
+                return None
+        old_tree = self.cache.get(c.parents[0]).tree if c.parents else None
+        return render_diff(self.repo, tree_entries(self.repo.odb, old_tree),
+                           tree_entries(self.repo.odb, c.tree), formats, self.renames)
+
+    combined = False  # show: merges get a (dense) combined diff
+
+    def entry(self, oid) -> bytes:
+        head = self.header(oid)
+        if self.fmt == "user" and self.tformat:
+            head += b"\n"
+        d = self.diff(oid)
+        merge = len(self.cache.get(oid).parents) > 1
+        if d is not None or (merge and self.combined and self.diff_formats):
+            d = d or b""
+            # A combined diff of a clean merge is empty, but git still
+            # prints the separator. With both --stat and a patch the
+            # separator is "---" (log_tree_diff_flush).
+            if merge:
+                sep = b"\n"  # combined output always uses a blank line
+            elif self.fmt == "oneline":
+                sep = b""
+            elif "stat" in self.diff_formats and "patch" in self.diff_formats:
+                sep = b"---\n"
+            else:
+                sep = b"\n"
+            head += sep + d
+        return head
+
+    def render(self, oids) -> bytes:
+        entries = [self.entry(o) for o in oids]
+        if self.fmt == "oneline" or (self.fmt == "user" and self.tformat):
+            return b"".join(entries)
+        return b"\n".join(entries)
+
+
+@command("show")
+def cmd_show(args):
+    """Commits (with their patch), annotated tags, trees and blobs."""
+    from pygit.objects import Tag, parse_tree
+    from pygit.repo import find_repo
+    repo = find_repo()
+    fmt, user_format, tformat = "medium", None, True
+    abbrev_commit = False
+    diff_formats = ["patch"]
+    explicit_diff = False
+    names = []
+    for arg in args:
+        if arg in DIFF_FORMAT_FLAGS:
+            if not explicit_diff:
+                diff_formats = []
+                explicit_diff = True
+            diff_formats.append(DIFF_FORMAT_FLAGS[arg])
+        elif arg in ("-s", "--no-patch"):
+            diff_formats, explicit_diff = [], True
+        elif arg == "--oneline":
+            fmt, abbrev_commit = "oneline", True
+        elif arg.startswith("--format=") or arg.startswith("--pretty="):
+            val = arg.split("=", 1)[1]
+            if val in ("oneline", "short", "medium", "full", "fuller", "raw"):
+                fmt = val
+            else:
+                fmt = "user"
+                tformat = not val.startswith("format:")
+                user_format = val.split(":", 1)[1] if val.startswith(("format:", "tformat:")) else val
+        elif arg.startswith("-"):
+            raise GitError(f"unrecognized argument: {arg}")
         else:
-            chunks.append(medium(repo, shown, c, abbrev))
-    if fmt == "user":
-        # tformat terminates every entry; format: only separates them.
-        if tformat:
-            out(b"".join(ch + b"\n" for ch in chunks))
-        else:
-            out(b"\n".join(chunks))
-    elif fmt == "oneline":
-        out(b"".join(chunks))
-    else:
-        out(b"\n".join(chunks))
+            names.append(arg)
+    if not names:
+        names = ["HEAD"]
+    cache = CommitCache(repo)
+    view = LogView(repo, cache, fmt, user_format, tformat, abbrev_commit, diff_formats)
+    view.combined = True
+    pieces = []
+    for name in names:
+        try:
+            oid = revparse.resolve(repo, name)
+        except GitError:
+            raise GitError(f"ambiguous argument '{name}': unknown revision or path not in the working tree.\n"
+                           "Use '--' to separate paths from revisions, like this:\n"
+                           "'git <command> [<revision>...] -- [<file>...]'")
+        while True:
+            t, data = repo.odb.read(oid)
+            if t == b"tag":
+                tag = Tag.parse(data)
+                text = b"tag " + tag.tag + b"\n"
+                if tag.tagger is not None:
+                    text += b"Tagger: " + tag.tagger.name + b" <" + tag.tagger.email + b">\n"
+                    text += b"Date:   " + date_normal(tag.tagger) + b"\n"
+                text += b"\n" + tag.message
+                pieces.append(text if text.endswith(b"\n") else text + b"\n")
+                oid = tag.object
+                continue
+            if t == b"commit":
+                pieces.append(view.entry(oid))
+            elif t == b"tree":
+                lines = [e.name + (b"/" if e.is_tree else b"") + b"\n" for e in parse_tree(data)]
+                pieces.append(b"tree " + name.encode() + b"\n\n" + b"".join(lines))
+            else:
+                pieces.append(data)
+            break
+    # Commit and tag entries are separated by a blank line, as in log.
+    outp = b""
+    for i, piece in enumerate(pieces):
+        if i and (fmt not in ("oneline",) and not (fmt == "user" and tformat)):
+            outp += b"\n"
+        outp += piece
+    out(outp)
     return 0
+
+
+def render_diff(repo, old: dict, new: dict, formats: list[str], renames: bool = True) -> bytes:
+    """The diff part of a log entry, in git's order: stats before the patch."""
+    from pygit import diffout
+    from pygit.treediff import diff_maps, summary_lines
+    pairs = diff_maps(repo.odb, old, new, renames=renames)
+    if not pairs:
+        return None  # no changes: no separator either
+    contents = diffout.Contents(repo)
+    parts = []
+    if "stat" in formats:
+        parts.append(diffout.stat(pairs, contents))
+    if "shortstat" in formats and "stat" not in formats:
+        parts.append(diffout.shortstat_for(pairs, contents))
+    if "numstat" in formats:
+        parts.insert(0, diffout.numstat(pairs, contents))
+    if "summary" in formats:
+        parts.append(summary_lines(pairs))
+    if "name-only" in formats:
+        parts.append(diffout.name_only(pairs))
+    if "name-status" in formats:
+        parts.append(diffout.name_status(pairs))
+    text = b"".join(parts)
+    if "patch" in formats:
+        patch = diffout.patch(repo, pairs, contents)
+        text = text + (b"\n" if text else b"") + patch
+    return text
 
 
 def walk_paths(repo, include, exclude, paths, first_parent, cache):

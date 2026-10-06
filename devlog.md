@@ -130,3 +130,11 @@ milestones.
   took `../x` and a bare `..` for revision ranges. Arguments are now
   revisions only if every end of a range resolves, and paths otherwise
   when they exist, as git decides. 94 tests pass.
+- 06:08 PST: **`log` diff options and `show`.** `log -p`, `--stat`,
+  `--numstat`, `--shortstat`, `--name-only`, `--name-status`, `--summary`
+  (first-parent diffs, none for merges), with git's separators: a blank
+  line between message and diff, `---` when both a stat and a patch are
+  shown, none for `--oneline`, and a separator even when a commit's
+  summary is empty. `show` handles commits (merges in combined mode:
+  stats against the first parent, an empty patch for clean merges),
+  annotated tags, trees and blobs. 95 tests pass.
