@@ -4,8 +4,6 @@ The five stages of `data_lake/brief.md` are done (see `devlog.md`). What
 remains is closing the limits listed in README.md, most valuable first:
 the ones where pygit's output can differ from git's on ordinary use.
 
-- **Pathspecs from subdirectories in `diff`/`log`.** `ls-tree` is done;
-  check the others against git from a subdirectory.
 - **Combined diff.** `diff --cc` for unmerged paths during a merge.
 - **`log -p` / `log --stat` / `show`.** Reuse the diff output layer.
 - **Content filters.** `core.autocrlf`, `.gitattributes` `text`/`eol`/`binary`.

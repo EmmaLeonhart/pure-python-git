@@ -258,6 +258,16 @@ class TestDiff(GitTestCase):
             with self.subTest(args=args):
                 self.assertSame(*args)
 
+    def test_paths_from_subdirectory(self):
+        self.change()
+        sub = self.repo / "dir"
+        for args in (["diff"], ["diff", "."], ["diff", "../nums"], ["diff", "../nums", "."],
+                     ["diff", "--stat", ".."], ["diff", "HEAD", "--name-only", "--", ".."],
+                     ["log", "--format=%s", "."], ["log", "--format=%s", "../nums"],
+                     ["log", "--format=%s", "HEAD", "--", "."]):
+            with self.subTest(args=args):
+                self.assertSame(*args, cwd=sub)
+
     def test_type_change_and_mode(self):
         self.write("f", "f\n")
         self.git("add", "f")

@@ -126,13 +126,15 @@ def cmd_diff(args):
                 paths.append(r)
                 continue
             try:
-                if ".." in r:
-                    rv.append(r)
-                else:
-                    revparse.resolve(repo, r)
-                    rv.append(r)
+                # A range is checked by resolving its ends ("../x" is a path);
+                # ".." alone, with no ends, is a path too.
+                if r.strip(".") == "":
+                    raise GitError("not a revision")
+                for end in (r.replace("...", "..").split("..") if ".." in r else [r]):
+                    revparse.resolve(repo, end or "HEAD")
+                rv.append(r)
             except GitError:
-                if repo.worktree is not None and (repo.worktree / r).exists():
+                if repo.worktree is not None and os.path.exists(r):  # relative to the cwd
                     paths.append(r)
                 else:
                     raise GitError(f"ambiguous argument '{r}': unknown revision or path not in the working tree.\n"

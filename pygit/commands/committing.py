@@ -286,8 +286,26 @@ def cmd_log(args):
             pass
         elif arg.startswith("-"):
             raise GitError(f"unrecognized argument: {arg}")
+        elif paths:
+            paths.append(arg)  # after the first path, everything is a path
         else:
             revs.append(arg)
+    # Without "--", an argument that is not a revision but names a file is
+    # a path (and so is everything after it).
+    if revs and not paths:
+        for i, r in enumerate(revs):
+            spec = r[1:] if r.startswith("^") else r
+            try:
+                # A range is checked by resolving its ends ("../x" is a path);
+                # ".." alone, with no ends, is a path too.
+                if spec.strip(".") == "":
+                    raise GitError("not a revision")
+                for end in (spec.replace("...", "..").split("..") if ".." in spec else [spec]):
+                    revparse.resolve(repo, end or "HEAD")
+            except GitError:
+                if os.path.exists(r):
+                    revs, paths = revs[:i], revs[i:]
+                break
     if not revs:
         head, name = Refs(repo).resolve("HEAD")
         if head is None:

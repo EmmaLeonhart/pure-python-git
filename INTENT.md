@@ -64,6 +64,10 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
   close the limits documented in README.md, most output-affecting first
   (`todo.md`). This is an assumption; the user may prefer to stop here or
   steer elsewhere.
+- 2026-10-06 05:49 PST: since then, exact rename scoring, `ls-tree` from
+  subdirectories, and `diff`/`log` path arguments from subdirectories.
+  The user has not written since the session began. Test runs take 20+
+  minutes at the moment because other workloads load the machine.
 
 ## Open questions
 

@@ -124,3 +124,9 @@ milestones.
   ancestor-directory case. 24 new subdirectory cases match git. 93 tests
   pass (the run took 20 minutes because other workloads were loading the
   machine; normally about 5).
+- 05:50 PST: **`diff` and `log` path arguments from subdirectories.**
+  `diff` looked for an undashed path relative to the repository root
+  instead of the cwd; `log` did not accept undashed paths at all; both
+  took `../x` and a bare `..` for revision ranges. Arguments are now
+  revisions only if every end of a range resolves, and paths otherwise
+  when they exist, as git decides. 94 tests pass.
