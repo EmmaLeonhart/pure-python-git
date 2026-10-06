@@ -3,23 +3,24 @@
 Delete-only: a finished item is removed from here and logged in `devlog.md`
 in the same commit.
 
-## Stage 1: the object store
+## Stage 2: the index
 
-1. Package skeleton: `pygit/` with `__main__.py`, a CLI dispatcher, and
-   `tests/` with a helper that runs the real `git` in temp directories.
-   CI workflow (`.github/workflows/ci.yml`) on Linux/Windows/macOS.
-2. `init`: create `.git/` (objects, refs/heads, refs/tags, HEAD, config)
-   that `git` accepts (`git status`, `git fsck` clean).
-3. Objects: hashing and loose object read/write (zlib), object types blob,
-   tree, commit, tag; parse and serialize each. `hash-object [-w] [-t]
-   [--stdin]` matches git's ids.
-4. `cat-file -t/-s/-p/-e` and `cat-file <type> <obj>` byte-identical to git,
-   on objects written by git and by pygit.
-5. `ls-tree [-r] [-t] [-d] [--name-only] <tree-ish>` byte-identical to git
-   (including path quoting and mode formatting).
-6. Refs and HEAD: symbolic refs, loose refs, `packed-refs` reading;
-   `rev-parse` for full/abbreviated ids, refs, `HEAD`, `^`, `~N`,
-   `^{tree}`, `^{commit}`, `<rev>:<path>`.
-7. Interop test: git builds a repo, pygit reads it; pygit writes
-   objects/refs, `git fsck` and `git log` accept them. Update README design
-   section for stage 1.
+1. Index read/write (`.git/index`, version 2, with the trailing SHA-1;
+   extensions skipped on read and dropped on write, except that a `TREE`
+   cache is never written stale). Round-trip test against git-written indexes.
+2. `ls-files` (`-s`, `--stage`) to check the index byte for byte against git.
+3. `write-tree` from the index; matches git's tree ids.
+4. `.gitignore` rules: per-directory `.gitignore`, `.git/info/exclude`,
+   `core.excludesFile`; negation, `/` anchoring, `**`, trailing `/` for
+   directories. Test with `check-ignore` against git.
+5. `add` (paths, directories, `-A`, `.`), `rm` (`--cached`, `-r`), updating
+   stat data so git sees a clean index.
+6. `status` (long format and `--short`/`--porcelain`): staged, unstaged,
+   untracked, deleted; byte-identical to git where git defines the format
+   (`--porcelain`).
+7. `commit` (`-m`, `-a`, `--allow-empty`, root commits), HEAD and reflog
+   update, output line `[branch id] subject`.
+8. `log` (default format, `--oneline`, `--format` basics, `-n`), matching git
+   for linear and merge histories.
+9. Interop: git commits on a pygit-built index and the other way round;
+   `git fsck` and `git status` clean. README design section for stage 2.
