@@ -183,7 +183,28 @@ def _run(repo) -> int:
         end = int(_read(repo, "end"))
         err(f"Rebasing ({msgnum}/{end})\r")
         cmd = COMMANDS.get(line.split()[0], line.split()[0])
+        refs = Refs(repo)
+        if cmd == "exec":
+            rc = _exec(repo, line.split(None, 1)[1])
+            if rc:
+                return rc
+            continue
+        if cmd == "break":
+            head, _ = refs.resolve("HEAD")
+            hc = Commit.parse(repo.odb.read(head)[1])
+            err(f"Stopped at {revparse.short_id(repo, head)} ({_subject(hc)})\n")
+            return 0
         oid = revparse.resolve(repo, line.split()[1])
+        head, _ = refs.resolve("HEAD")
+        oc = Commit.parse(repo.odb.read(oid)[1])
+        if cmd in ("pick", "reword", "edit") and oc.parents[:1] == [head]:
+            # Already on top of HEAD: fast-forward, keeping the commit as it is.
+            from pygit.checkout import switch_trees
+            switch_trees(repo, Commit.parse(repo.odb.read(head)[1]).tree, oc.tree)
+            refs.update("HEAD", oid, f"rebase (pick): {_subject(oc)}", no_deref=True)
+            if not _after_pick(repo, cmd, oid):
+                return 0
+            continue
         try:
             res, applied, c, short, subject, head_tree = apply_commit(repo, oid, "rebase")
         except Fatal as e:
@@ -227,11 +248,50 @@ def _run(repo) -> int:
             continue
         if tree == head_tree:
             continue  # now empty: dropped, as --empty=drop does
-        _commit(repo, tree, author, message, f"rebase (pick): {subject}")
+        new = _commit(repo, tree, author, message, f"rebase (pick): {subject}")
+        if not _after_pick(repo, cmd, new):
+            return 0
+
+
+def _after_pick(repo, cmd: str, oid: str) -> bool:
+    """reword prints the summary of `git commit --amend` (pygit opens no
+    editor, so the message stays); edit stops. False means stop here."""
+    if cmd == "reword":
+        from pygit.commands.committing import commit_summary
+        out(commit_summary(repo, oid, Commit.parse(repo.odb.read(oid)[1]), b"detached HEAD",
+                           root=False, date_interesting=True))
+    elif cmd == "edit":
+        short = revparse.short_id(repo, oid)
+        subject = _subject(Commit.parse(repo.odb.read(oid)[1]))
+        err(f"Stopped at {short}...  # {subject}\n"
+            "You can amend the commit now, with\n\n"
+            "  git commit --amend \n\n"
+            "Once you are satisfied with your changes, run\n\n"
+            "  git rebase --continue\n")
+        return False
+    return True
+
+
+def _exec(repo, command_line: str) -> int:
+    import shutil as sh
+    import subprocess
+    import sys
+    err(f"Executing: {command_line}\n")
+    sys.stdout.flush()
+    shell = sh.which("sh") or sh.which("bash")
+    argv = [shell, "-c", command_line] if shell else command_line
+    rc = subprocess.call(argv, shell=not shell, cwd=str(repo.worktree))
+    if rc:
+        err(f"warning: execution failed: {command_line}\n"
+            "You can fix the problem, and then run\n\n"
+            "  git rebase --continue\n\n\n")
+        return 1
+    return 0
 
 
 COMMANDS = {"p": "pick", "pick": "pick", "f": "fixup", "fixup": "fixup", "s": "squash",
-            "squash": "squash", "d": "drop", "drop": "drop"}
+            "squash": "squash", "d": "drop", "drop": "drop", "r": "reword", "reword": "reword",
+            "e": "edit", "edit": "edit", "x": "exec", "exec": "exec", "b": "break", "break": "break"}
 
 TODO_HELP = """
 # Commands:
@@ -376,16 +436,30 @@ def _start(repo, upstream: str, onto_spec: str | None, branch_arg: str | None,
         # skip_unnecessary_picks: leading picks already on top of onto stay
         # as they are; HEAD fast-forwards over them.
         new_onto = onto
+        skipped = []
         while commands and commands[0][0] == "pick" and \
                 Commit.parse(repo.odb.read(commands[0][1])[1]).parents[:1] == [new_onto]:
-            new_onto = commands.pop(0)[1]
+            skipped.append(commands.pop(0))
+            new_onto = skipped[-1][1]
         if new_onto != onto:
             switch_trees(repo, onto_c.tree, Commit.parse(repo.odb.read(new_onto)[1]).tree)
             refs.update("HEAD", new_onto, f"rebase: fast-forward", no_deref=True)
-    _write(repo, "end", f"{len(commands)}\n")
-    todo = "".join(f"{cmd} {o} # {_subject(Commit.parse(repo.odb.read(o)[1]))}\n" for cmd, o in commands)
-    _write(repo, "git-rebase-todo", todo)
+        # Skipped picks count as done, as in git's progress numbers.
+        _write(repo, "done", "".join(_todo_line(repo, c, a) for c, a in skipped))
+        _write(repo, "msgnum", f"{len(skipped)}\n")
+        _write(repo, "end", f"{len(skipped) + len(commands)}\n")
+    else:
+        _write(repo, "end", f"{len(commands)}\n")
+    _write(repo, "git-rebase-todo", "".join(_todo_line(repo, c, a) for c, a in commands))
     return _run(repo)
+
+
+def _todo_line(repo, cmd: str, arg) -> str:
+    if cmd == "break":
+        return "break\n"
+    if cmd == "exec":
+        return f"exec {arg}\n"
+    return f"{cmd} {arg} # {_subject(Commit.parse(repo.odb.read(arg)[1]))}\n"
 
 
 def _interactive_todo(repo, picks, up, head, onto):
@@ -407,9 +481,15 @@ def _interactive_todo(repo, picks, up, head, onto):
     for i, line in enumerate(_todo_lines(repo, "git-rebase-todo"), 1):
         parts = line.split()
         cmd = COMMANDS.get(parts[0])
+        if cmd == "break":
+            commands.append((cmd, None))
+            continue
         if cmd is None or len(parts) < 2:
             raise GitError(f"invalid line {i}: {line}")
         if cmd == "drop":
+            continue
+        if cmd == "exec":
+            commands.append((cmd, line.split(None, 1)[1]))
             continue
         commands.append((cmd, revparse.resolve(repo, parts[1])))
     if not commands:

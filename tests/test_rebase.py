@@ -116,6 +116,24 @@ class TestRebase(Stage3Twin):
         self.interactive_history()
         self.interactive("sed -i -e 's/^pick \\(.*add d\\)/squash \\1/' -e '1{h;d}' -e '/add d/G'", "HEAD~3")
 
+    def test_interactive_reword(self):
+        self.interactive_history()
+        self.interactive("sed -i -e '2s/^pick/reword/'", "HEAD~3")
+        self.interactive("sed -i -e '1d' -e '2s/^pick/reword/'", "HEAD~3")
+
+    def test_interactive_edit_exec_break(self):
+        self.interactive_history()
+        self.interactive("sed -i -e '2s/^pick/edit/'", "HEAD~3")
+        self.step("status")
+        self.step("rebase", "--continue")
+        self.step("log", "--format=%H %s")
+        self.interactive("sed -i -e '2a exec echo hello' -e '3a break'", "HEAD~3")
+        self.step("status")
+        self.step("rebase", "--continue")
+        self.interactive("sed -i -e '1a exec false'", "HEAD~2")
+        self.step("rebase", "--abort")
+        self.step("log", "--format=%H %s")
+
     def test_interactive_squash_first(self):
         self.interactive_history()
         self.interactive("sed -i -e '1s/^pick/squash/'", "HEAD~3")

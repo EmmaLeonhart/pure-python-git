@@ -176,10 +176,10 @@ an approximation; random tests compare the results with git.
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
   `--overlay` options; `rebase -i` takes its todo list from
-  `GIT_SEQUENCE_EDITOR`/`sequence.editor` and knows pick, drop, fixup
-  (without `-C`/`-c`) and squash, not reword, edit, exec, break, label,
-  reset, merge or update-ref, and there is no `--autosquash`, `--exec` or
-  `--reapply-cherry-picks`; `stash` has no `-a`/`--all`, `--keep-index`, `--patch` or
+  `GIT_SEQUENCE_EDITOR`/`sequence.editor` and knows pick, reword (the
+  message is kept), edit, squash, fixup (without `-C`/`-c`), exec, break
+  and drop, not label, reset, merge or update-ref, and there is no
+  `--autosquash`, `--exec` or `--reapply-cherry-picks`; `stash` has no `-a`/`--all`, `--keep-index`, `--patch` or
   `branch`; and
   `cherry-pick` and `revert` have no `--edit`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy

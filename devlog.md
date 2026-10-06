@@ -237,3 +237,10 @@ milestones.
   git's error for a todo that starts with squash/fixup (rebase left in
   progress). `status` gained git's "editing a commit while rebasing" case.
   Rebase tests (11) pass; the full suite still waits on memory.
+- 12:21 PST: **rebase -i: reword, edit, exec, break**, and two fidelity
+  fixes: a pick whose parent is already HEAD fast-forwards (the commit is
+  kept, not rewritten), and skipped leading picks count in the progress
+  numbers and the done list, as in git. edit/break stop with exit 0 and
+  git's messages; exec runs through `sh` and reports failures as git
+  does; reword prints the amend summary (the message stays, as no editor
+  runs). Rebase tests (13) pass; the full suite still waits on memory.
