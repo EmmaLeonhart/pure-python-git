@@ -102,7 +102,10 @@ The package is layered so each stage builds on the one below:
   cost heuristics, change compaction with the indent heuristic, hunk
   emission). It produces the same hunks as git, not only a minimal diff.
 - `pygit/diffcore.py`, `pygit/treediff.py`: tree comparison and rename
-  detection; the diffstat summary `commit` prints.
+  detection (a port of git's diffcore-rename and diffcore-delta: exact
+  renames, unique-basename matches, then the scored candidate matrix;
+  pairs and similarity scores match git on random inputs); the diffstat
+  summary `commit` prints.
 - `pygit/diffout.py`: patch headers, `--stat` layout (git's width and
   scaling rules), numstat and name-status output.
 - `pygit/checkout.py`: moving the index and work tree between trees with
@@ -145,9 +148,6 @@ an approximation; random tests compare the results with git.
 - No editor, hooks, signing, pager or colour anywhere: `commit`, `tag -a`
   and `merge` need their message on the command line or in a file.
 - `commit` takes no pathspecs.
-- Rename similarity uses git's chunking idea but not its exact hash, so a
-  pair scoring right at the 50% threshold may be paired differently than
-  git pairs it. Exact renames always match.
 - `log` has no `--graph`, decorations, `-p`/`--stat`, relative dates or
   `--follow`; path limiting implements git's default simplification only.
 - `ls-tree` paths are taken from the repository root, not the current

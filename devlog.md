@@ -108,3 +108,12 @@ milestones.
   `pull.rebase=false`) and remote. 91 tests pass on Python 3.13. README
   now documents the whole design and its limits; todo.md lists the limits
   to close next.
+- 03:56 PST: the full suite (91 tests) also passes on Python 3.11.
+  **Exact rename detection:** `pygit/diffcore.py` now ports git's
+  diffcore-delta span hashing (spans end at a newline or 64 bytes; CR
+  before LF ignored in text) and diffcore-rename's passes (exact,
+  unique-basename at the halfway score, then the top-4-per-destination
+  candidate matrix assigned greedily), including the size-ratio cutoff.
+  Pairs and similarity percentages match `git diff --no-index -M` on 600
+  random file sets; `tests/test_renames.py` keeps 80 of them. Removed the
+  matching limit from README and todo.md. 92 tests pass.

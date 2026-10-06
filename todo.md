@@ -4,9 +4,6 @@ The five stages of `data_lake/brief.md` are done (see `devlog.md`). What
 remains is closing the limits listed in README.md, most valuable first:
 the ones where pygit's output can differ from git's on ordinary use.
 
-- **Exact rename scoring.** Port diffcore-delta's spanhash similarity so
-  renames near the 50% threshold pair exactly as git pairs them (affects
-  `status`, `diff`, `commit` summaries, `merge`).
 - **Path display relative to the cwd everywhere.** `ls-tree` from a
   subdirectory; check `diff`/`log` pathspecs from subdirectories.
 - **Combined diff.** `diff --cc` for unmerged paths during a merge.
