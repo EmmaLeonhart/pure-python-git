@@ -228,3 +228,12 @@ milestones.
   messages follow git: "reversing changes made to <parent>" for merges,
   and `Reapply "X"` when reverting `Revert "X"`. Revert (4) and
   cherry-pick (5) tests pass; the full suite still waits on memory.
+- 11:54 PST: **interactive rebase** (`rebase -i`) through a sequence
+  editor (`GIT_SEQUENCE_EDITOR` / `sequence.editor`, run through `sh` as
+  git does; pygit opens no editor itself): git's todo text and help block,
+  pick/drop/fixup/squash and reordering, skipping of unnecessary leading
+  picks, the squash summary (fixups are silent), stopped fixups/squashes
+  amending on `--continue`, "nothing to do" returning to the start, and
+  git's error for a todo that starts with squash/fixup (rebase left in
+  progress). `status` gained git's "editing a commit while rebasing" case.
+  Rebase tests (11) pass; the full suite still waits on memory.

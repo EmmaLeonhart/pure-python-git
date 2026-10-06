@@ -89,6 +89,44 @@ class TestRebase(Stage3Twin):
         self.step("rebase", "main")
         self.step("log", "--format=%H %s")
 
+    def interactive_history(self):
+        self.write2("k", "k\n")
+        self.git2("add", ".")
+        self.git2("commit", "-q", "-m", "base")
+        for x in "abcd":
+            self.write2(x, x + "\n")
+            self.git2("add", x)
+            self.git2("commit", "-q", "-m", f"add {x}\n\nbody of {x}")
+
+    def interactive(self, script, *extra):
+        self.env["GIT_SEQUENCE_EDITOR"] = script
+        self.env["GIT_EDITOR"] = "true"
+        self.step("rebase", "-i", *extra)
+        self.step("log", "--format=%H %an %s%n%b")
+
+    def test_interactive_unchanged(self):
+        self.interactive_history()
+        self.interactive("true", "HEAD~3")
+
+    def test_interactive_drop_fixup_reorder(self):
+        self.interactive_history()
+        self.interactive("sed -i -e '1d' -e 's/^pick \\(.*add d\\)/fixup \\1/'", "HEAD~3")
+
+    def test_interactive_squash_and_reorder(self):
+        self.interactive_history()
+        self.interactive("sed -i -e 's/^pick \\(.*add d\\)/squash \\1/' -e '1{h;d}' -e '/add d/G'", "HEAD~3")
+
+    def test_interactive_squash_first(self):
+        self.interactive_history()
+        self.interactive("sed -i -e '1s/^pick/squash/'", "HEAD~3")
+        self.step("status")
+        self.step("rebase", "--abort")
+        self.step("log", "--format=%H %s")
+
+    def test_interactive_empty_todo(self):
+        self.interactive_history()
+        self.interactive("sed -i -e '/^pick/d'", "HEAD~2")
+
     def test_refusals_and_onto(self):
         self.setup()
         self.write2("a", "dirty\n")

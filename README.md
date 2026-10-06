@@ -72,7 +72,7 @@ tool writes are verified and indexed by the other.
   commits, conflicts, `--abort`, `--continue`), `cherry-pick` (`-x`, `-n`,
   several commits, `--continue`/`--skip`/`--abort`/`--quit`), `revert`
   (the same options except `-x`), `stash`
-  (push/save, list, show, apply, pop, drop, clear), `rebase` (`--onto`,
+  (push/save, list, show, apply, pop, drop, clear), `rebase` (`-i`, `--onto`,
   `--continue`/`--skip`/`--abort`/`--quit`), with
   `status`, `diff` and `commit` aware of merges and picks in progress.
 - Stage 5: `verify-pack`, `index-pack`, `pack-objects`, `count-objects`,
@@ -175,9 +175,11 @@ an approximation; random tests compare the results with git.
   `--combined`/`-m`/`--diff-merges` choice, and `log` shows no diffs for
   merges.
 - `checkout`/`switch` have no `--merge`, `--conflict`, `--patch` or
-  `--overlay` options; `rebase` is non-interactive only (no `-i`,
-  `--autosquash`, `--exec`, `--reapply-cherry-picks`) and never opens an
-  editor; `stash` has no `-a`/`--all`, `--keep-index`, `--patch` or
+  `--overlay` options; `rebase -i` takes its todo list from
+  `GIT_SEQUENCE_EDITOR`/`sequence.editor` and knows pick, drop, fixup
+  (without `-C`/`-c`) and squash, not reword, edit, exec, break, label,
+  reset, merge or update-ref, and there is no `--autosquash`, `--exec` or
+  `--reapply-cherry-picks`; `stash` has no `-a`/`--all`, `--keep-index`, `--patch` or
   `branch`; and
   `cherry-pick` and `revert` have no `--edit`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
