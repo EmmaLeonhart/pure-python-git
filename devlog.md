@@ -215,3 +215,10 @@ milestones.
   `---`/`+++` lines and so differs by design; equality between commits,
   which is what rebase uses, is unaffected). New rebase test passes, as
   do the other 5. The full suite still waits on memory (queue item 1).
+- 10:58 PST: **`stash -u`**: the untracked (not ignored) files go into a
+  parentless third-parent commit ("untracked files on ...") and leave the
+  work tree; an untracked-only stash is allowed; apply restores them,
+  refusing with git's "already exists, no checkout" error when one is in
+  the way (entry kept), and prints merge-ort's "Already up to date." when
+  the stash changed no tracked file. Stash commit ids still match git's.
+  Stash tests (4) pass; the full suite still waits on memory.

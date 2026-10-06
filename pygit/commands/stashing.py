@@ -39,12 +39,19 @@ def _head_label(repo) -> tuple[str, str, Commit]:
     return head, branch, c
 
 
-def _push(repo, message: str | None, quiet: bool) -> int:
+def _untracked_files(repo) -> list[bytes]:
+    from pygit.ignore import IgnoreRules
+    u, _ = worktree.untracked(repo, Index.read(repo), IgnoreRules(repo), all_files=True)
+    return u
+
+
+def _push(repo, message: str | None, quiet: bool, include_untracked: bool = False) -> int:
     from pygit.ident import ident
     from pygit.status import compute
     head, branch, hc = _head_label(repo)
     st = compute(repo, untracked_mode="no", detect_renames=False)
-    if not st.staged and not st.unstaged and not st.unmerged:
+    untracked = _untracked_files(repo) if include_untracked else []
+    if not st.staged and not st.unstaged and not st.unmerged and not untracked:
         out(b"No local changes to save\n")
         return 0
     if st.unmerged:
@@ -69,9 +76,18 @@ def _push(repo, message: str | None, quiet: bool) -> int:
         else:
             w_idx.entries[(e.path, 0)] = e
     w_tree = w_idx.write_tree(repo.odb)
+    parents = [head, i_oid]
+    if untracked:
+        # -u: a parentless commit of the untracked files is the third parent.
+        u_idx = Index(repo.gitdir / "index.stash-u")
+        for p in untracked:
+            u_idx.entries[(p, 0)] = worktree.entry_for_file(repo, p, None, write=True)
+        u_commit = Commit(u_idx.write_tree(repo.odb), [], author, who,
+                          f"untracked files on {desc}\n".encode())
+        parents.append(repo.odb.write(b"commit", u_commit.serialize()))
     w_msg = (f"On {branch}: {message}" if message else f"WIP on {desc}")
     # git writes this message without a final newline (the index commit has one).
-    w_commit = Commit(w_tree, [head, i_oid], author, who, w_msg.encode())
+    w_commit = Commit(w_tree, parents, author, who, w_msg.encode())
     w_oid = repo.odb.write(b"commit", w_commit.serialize())
     refs = Refs(repo)
     old, _ = refs.resolve(STASH)
@@ -79,8 +95,13 @@ def _push(repo, message: str | None, quiet: bool) -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
     log.touch(exist_ok=True)  # refs/stash always keeps a reflog
     refs.update(STASH, w_oid, w_msg)
-    # Back to HEAD, like reset --hard for tracked files.
+    # Back to HEAD, like reset --hard for tracked files; stashed untracked
+    # files go too.
     _reset_to_head(repo, hc.tree, idx)
+    if untracked:
+        from pygit.checkout import remove_file
+        for p in untracked:
+            remove_file(repo, p)
     if not quiet:
         out(f"Saved working directory and index state {w_msg}\n".encode())
     return 0
@@ -146,11 +167,26 @@ def _apply(repo, oid: str, restore_index: bool) -> int:
         local, untracked = applied
         err(conflict_message(local, untracked, "merge", "merge"))
         return 1
+    if w.tree == b_tree:
+        # merge-ort's trivial case: the stash changed no tracked file.
+        out(b"Already up to date.\n")
     for line in res.sorted_messages():
         out(line.encode() + b"\n")
     if not res.clean:
         out(long_status(repo, compute(repo), cwd_prefix(repo)))
         return 1
+    if len(w.parents) > 2:
+        # -u stash: put the untracked files back, refusing to overwrite.
+        from pygit.checkout import tree_map, write_file
+        u_files = tree_map(repo.odb, Commit.parse(repo.odb.read(w.parents[2])[1]).tree)
+        clashes = [p for p in sorted(u_files) if worktree.lstat(repo, p) is not None]
+        if clashes:
+            err("".join(f"{p.decode('utf-8', 'replace')} already exists, no checkout\n" for p in clashes) +
+                "error: could not restore untracked files from stash\n")
+            out(long_status(repo, compute(repo), cwd_prefix(repo)))
+            return 1
+        for p, (m, o) in sorted(u_files.items()):
+            write_file(repo, p, m, o)
     new_idx = Index.read(repo)
     if restore_index:
         # The index as stashed: the stash's index changes on top of HEAD.
@@ -223,15 +259,18 @@ def cmd_stash(args):
     rest = [a for a in rest if a not in ("-q", "--quiet")]
     if sub in ("push", "save"):
         message = None
+        include_untracked = False
         it = iter(rest)
         for a in it:
             if a in ("-m", "--message"):
                 message = next(it)
+            elif a in ("-u", "--include-untracked"):
+                include_untracked = True
             elif a.startswith("-"):
                 raise GitError(f"unsupported stash option '{a}'")
             elif sub == "save":
                 message = " ".join([a] + list(it))
-        return _push(repo, message, quiet)
+        return _push(repo, message, quiet, include_untracked)
     if sub == "list":
         for n, (oid, msg) in enumerate(_entries(repo)):
             out(f"stash@{{{n}}}: ".encode() + msg + b"\n")

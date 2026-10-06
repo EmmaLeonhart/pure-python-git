@@ -5,5 +5,5 @@ remains is closing the limits listed in README.md, most valuable first:
 the ones where pygit's output can differ from git's on ordinary use.
 
 - **History editing, remaining options.** `rebase -i`, `cherry-pick -m` /
-  `revert -m`, `stash -u`.
+  `revert -m`.
 - **Pack fidelity.** Thin packs in `index-pack`, `.rev` files, `gc --auto`.

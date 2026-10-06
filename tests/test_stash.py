@@ -63,6 +63,29 @@ class TestStash(Stage3Twin):
         self.step("stash", "list")
         self.step("status")
 
+    def test_include_untracked(self):
+        self.setup()
+        self.write2(".gitignore", "*.log\n")
+        self.git2("add", ".gitignore")
+        self.git2("commit", "-q", "-m", "ignore logs")
+        self.write2("untracked", "u\n")
+        self.write2("d/x", "x\n")
+        self.write2("a.log", "ignored\n")
+        self.write2("k", "k\nk2\n")
+        self.step("stash", "-u")
+        self.step("status", "--porcelain", "--ignored")
+        for ref in ("refs/stash^3",):
+            self.assertEqual(self.git_out("rev-parse", ref, cwd=self.p), self.git_out("rev-parse", ref, cwd=self.g))
+        self.write2("v", "v\n")
+        self.step("stash", "push", "-u")          # untracked only
+        self.write2("v", "clash\n")
+        self.step("stash", "pop")                 # v exists: refused, kept
+        for d in (self.g, self.p):
+            (d / "v").unlink()
+        self.step("stash", "pop")
+        self.step("stash", "pop")
+        self.step("status", "--porcelain")
+
     def test_git_reads_pygit_stash(self):
         """A stash made by pygit is applied by git, and the other way round."""
         self.setup()
