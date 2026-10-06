@@ -93,6 +93,17 @@ class TestLsTree(GitTestCase):
                 with self.subTest(paths=paths, flags=flags):
                     self.assertSame("ls-tree", *flags, "HEAD", *paths)
 
+    def test_from_subdirectories(self):
+        """Paths are relative to the cwd; the cwd itself shows as ./"""
+        cases = [[], ["-r"], ["-t", "-r"], ["--full-name"], ["--full-tree"], ["..", ], ["../a.txt"],
+                 [".", ], ["deep/"], ["deep"], ["-r", ".."], ["--name-only", "-r"]]
+        for cwd in (self.repo / "sub", self.repo / "sub" / "deep"):
+            for args in cases:
+                flags = [a for a in args if a.startswith("-")]
+                paths = [a for a in args if not a.startswith("-")]
+                with self.subTest(cwd=cwd.name, args=args):
+                    self.assertSame("ls-tree", *flags, "HEAD", *paths, cwd=cwd)
+
     def test_not_a_tree(self):
         self.assertSame("ls-tree", "HEAD:a.txt")
 

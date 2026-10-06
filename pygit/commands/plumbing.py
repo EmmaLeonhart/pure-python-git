@@ -178,11 +178,34 @@ def cmd_ls_tree(args):
         tree = revparse.peel(repo, tree, b"tree")
     except GitError:
         raise GitError("not a tree object")
-    # A spec "dir" names the tree entry itself; "dir/" lists its contents.
-    specs = [s.replace("\\", "/").encode() for s in a.paths]
+    # Paths are relative to the cwd (unless --full-tree); with no paths, a
+    # subdirectory lists itself. A spec "dir" names the tree entry itself;
+    # "dir/" lists its contents.
+    from pygit.pathspec import cwd_prefix, relative_to_cwd
+    prefix = b"" if a.full_tree or repo.worktree is None else cwd_prefix(repo)
+    specs = []
+    for s in a.paths:
+        joined = (prefix + s.replace("\\", "/").encode()).split(b"/")
+        parts = []
+        for part in joined:
+            if part == b"..":
+                if parts:
+                    parts.pop()
+            elif part not in (b"", b"."):
+                parts.append(part)
+        spec = b"/".join(parts)
+        if s.endswith(("/", "\\", ".")) and spec:
+            spec += b"/"
+        specs.append(spec)
+    if b"" in specs:
+        specs = []  # a spec naming the top of the tree ("..") lists it all
+    elif prefix and not specs:
+        specs = [prefix]
+    show_prefix = b"" if a.full_name or a.full_tree else prefix
     end = b"\0" if a.z else b"\n"
     for e, path in _ls_tree_walk(repo, tree, b"", a, specs):
-        shown = path if a.z else _quote(path)
+        rel = relative_to_cwd(path, show_prefix)
+        shown = rel if a.z else _quote(rel)
         oid = e.oid.encode()
         if a.abbrev:
             oid = revparse.short_id(repo, e.oid, a.abbrev).encode()

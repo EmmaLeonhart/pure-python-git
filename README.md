@@ -150,8 +150,6 @@ an approximation; random tests compare the results with git.
 - `commit` takes no pathspecs.
 - `log` has no `--graph`, decorations, `-p`/`--stat`, relative dates or
   `--follow`; path limiting implements git's default simplification only.
-- `ls-tree` paths are taken from the repository root, not the current
-  directory.
 - Index extensions (`TREE`, `UNTR`, split index, sparse checkout) are not
   written.
 - `diff` has no `--color`, word diff, `--relative`, `-M<n>` thresholds,

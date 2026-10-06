@@ -117,3 +117,10 @@ milestones.
   Pairs and similarity percentages match `git diff --no-index -M` on 600
   random file sets; `tests/test_renames.py` keeps 80 of them. Removed the
   matching limit from README and todo.md. 92 tests pass.
+- 04:53 PST: **`ls-tree` from subdirectories.** Paths are taken relative
+  to the cwd (no paths in a subdirectory lists that directory), shown
+  relative to it (the cwd itself as `./`, parents as `../`), with
+  `--full-name` and `--full-tree`. `relative_to_cwd` gained the
+  ancestor-directory case. 24 new subdirectory cases match git. 93 tests
+  pass (the run took 20 minutes because other workloads were loading the
+  machine; normally about 5).

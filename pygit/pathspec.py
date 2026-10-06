@@ -56,6 +56,10 @@ def relative_to_cwd(path: bytes, prefix: bytes) -> bytes:
     slash = path.endswith(b"/")  # directories shown as "dir/"
     p_parts = prefix.rstrip(b"/").split(b"/")
     parts = path.rstrip(b"/").split(b"/")
+    if p_parts[:len(parts)] == parts:
+        # The path is the cwd or one of its parents: "./", "../", "../../"...
+        up = len(p_parts) - len(parts)
+        return b"../" * up if up else b"./"
     i = 0
     limit = len(parts) if slash else len(parts) - 1
     while i < len(p_parts) and i < limit and p_parts[i] == parts[i]:
