@@ -48,6 +48,15 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
 - Standard library only.
 - (None given in chat yet.)
 
+## Blocked
+
+- **CI: BLOCKED-ON-USER-ACTION.** GitHub Actions jobs are not started on
+  this account ("recent account payments have failed or your spending limit
+  needs to be increased", run 37442191253, 2026-10-06). Unblock: fix billing
+  or the spending limit in GitHub's Billing & plans settings. Until then the
+  suite is run locally on Windows (Python 3.13 and 3.11) before each push;
+  Linux/macOS and Python 3.9 are untested.
+
 ## Open questions
 
 - None blocking. Exact CLI coverage per command (which flags) is decided as
