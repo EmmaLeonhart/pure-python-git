@@ -80,3 +80,16 @@ milestones.
   on a merge, so git waited for an editor and the run hung for 10 minutes;
   the test environment now sets `GIT_EDITOR=false`. 80 tests pass.
   Stage 5 is broken down in queue.md.
+- 03:38 PST: **stage 5, packs: reading, writing, verify-pack, index-pack,
+  pack-objects, count-objects, pack-refs, prune, gc.** `pygit/pack.py`
+  reads v1/v2 indexes and v2 packs with OFS/REF deltas (all objects of a
+  `git gc --aggressive` repository read identically), writes packs with
+  its own delta search (a window of 10 candidates sorted by type, name
+  hash and size; chains up to depth 50; 16-byte block matching) and v2
+  indexes. git's `index-pack` of a pygit pack produces a byte-identical
+  index, and pygit's `index-pack` of a git pack matches git's index.
+  `verify-pack -v` output is identical to git's. `gc` packs everything
+  reachable from refs, reflogs, the index and the *_HEAD files, writes
+  `packed-refs` exactly as `git pack-refs --all` does, drops old packs and
+  packed loose objects, and prunes unreachable loose objects past the
+  two-week grace period. 86 tests pass.
