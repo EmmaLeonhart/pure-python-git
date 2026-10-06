@@ -47,6 +47,9 @@ def write_file(repo, path: bytes, mode: int, oid: str) -> os.stat_result:
     if mode == 0o120000 and symlinks:
         os.symlink(os.fsdecode(data), fp)
     else:
+        if mode != 0o120000:
+            from pygit.convert import converter
+            data = converter(repo).to_worktree(path, data)
         fd = os.open(fp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0),
                      0o777 if mode == 0o100755 else 0o666)
         try:

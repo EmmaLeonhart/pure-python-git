@@ -14,13 +14,19 @@ def fs_path(repo, path: bytes) -> Path:
     return repo.worktree / os.fsdecode(path)
 
 
-def read_worktree_blob(repo, path: bytes, st: os.stat_result | None = None) -> bytes:
-    """The bytes git would store for a work-tree file (link target for symlinks)."""
+def read_worktree_blob(repo, path: bytes, st: os.stat_result | None = None,
+                       index_oid: str | None = None, warn: bool = False) -> bytes:
+    """The bytes git would store for a work-tree file: the link target for
+    symlinks, else the file after the clean (line-ending) conversion.
+    `index_oid` is the path's index blob, for git's rule that an index
+    version containing CR keeps "auto" files unconverted."""
     p = fs_path(repo, path)
     st = st or os.lstat(p)
     if statmod.S_ISLNK(st.st_mode):
         return os.fsencode(os.readlink(p))
-    return p.read_bytes()
+    from pygit.convert import converter
+    has_cr = (lambda: b"\r" in repo.odb.read(index_oid)[1]) if index_oid else None
+    return converter(repo).to_git(path, p.read_bytes(), has_cr, warn)
 
 
 def lstat(repo, path: bytes):
@@ -38,7 +44,7 @@ def entry_for_file(repo, path: bytes, old: IndexEntry | None = None, write: bool
     if old is not None and old.mode == 0o120000 and not statmod.S_ISLNK(st.st_mode) \
             and not repo.config.get_bool("core.symlinks", os.name != "nt"):
         mode = 0o120000  # core.symlinks=false: a checked-out link is a plain file
-    data = read_worktree_blob(repo, path, st)
+    data = read_worktree_blob(repo, path, st, old.oid if old else None, warn=write)
     oid = repo.odb.write(b"blob", data) if write else hash_bytes(b"blob", data)
     e = IndexEntry(path=path, oid=oid, mode=mode)
     e.set_stat(st)
@@ -60,7 +66,7 @@ def is_modified(repo, e: IndexEntry, st: os.stat_result | None = None) -> bool:
         return True
     if e.stat_matches(st) and not _racy(repo, e):
         return False
-    return hash_bytes(b"blob", read_worktree_blob(repo, e.path, st)) != e.oid
+    return hash_bytes(b"blob", read_worktree_blob(repo, e.path, st, e.oid)) != e.oid
 
 
 def _racy(repo, e: IndexEntry) -> bool:

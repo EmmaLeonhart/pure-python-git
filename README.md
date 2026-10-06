@@ -97,6 +97,11 @@ The package is layered so each stage builds on the one below:
 - `pygit/ignore.py`: a port of git's `wildmatch.c` and the `.gitignore`
   precedence rules (per-directory files, `info/exclude`,
   `core.excludesFile`; an excluded directory hides everything in it).
+- `pygit/attributes.py`, `pygit/convert.py`: `.gitattributes` (git's
+  precedence, macros) and the line-ending part of git's `convert.c`
+  (text detection for `auto`, the "index already has CR" rule, safecrlf
+  warnings, the native CRLF of Windows builds); applied wherever a
+  work-tree file is hashed or written.
 - `pygit/worktree.py`, `pygit/status.py`: work tree scanning, stat-based
   change detection with git's racy-clean check, untracked directory
   collapsing.
@@ -147,8 +152,10 @@ an approximation; random tests compare the results with git.
 ## Limits
 
 - SHA-1 repositories only; the SHA-256 object format is not supported.
-- Content filters (`core.autocrlf`, `.gitattributes`, `filter`, `eol`) are
-  not applied; file bytes are stored as they are.
+- Of the content conversions, only line endings are done (`core.autocrlf`,
+  `core.eol`, `core.safecrlf`, and the `text`/`eol`/`binary`/`crlf`
+  attributes); `filter` drivers, `ident`, `working-tree-encoding` and
+  `diff`/`merge` attribute drivers are not.
 - Config `[include]` sections are not followed.
 - No editor, hooks, signing, pager or colour anywhere: `commit`, `tag -a`
   and `merge` need their message on the command line or in a file.

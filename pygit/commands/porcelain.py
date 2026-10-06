@@ -247,6 +247,56 @@ def cmd_check_ignore(args):
     return 0 if found else 1
 
 
+@command("check-attr")
+def cmd_check_attr(args):
+    """`check-attr [-a | attr... --] path...`; without "--" the first
+    argument is the only attribute."""
+    from pygit.attributes import AttrRules
+    repo = find_repo()
+    show_all = False
+    rest = []
+    for a in args:
+        if a in ("-a", "--all"):
+            show_all = True
+        else:
+            rest.append(a)
+    if show_all:
+        names = None
+        paths = [p for p in rest if p != "--"]
+    elif "--" in rest:
+        i = rest.index("--")
+        names, paths = rest[:i], rest[i + 1:]
+    else:
+        if len(rest) < 2:
+            raise GitError("usage: git check-attr [--source <tree-ish>] [-a | --all | <attr>...] [--] <pathname>...")
+        names, paths = rest[:1], rest[1:]
+    rules = AttrRules(repo)
+    lines = []
+    for arg in paths:
+        path = to_repo_path(repo, arg) if repo.worktree is not None else os.fsencode(arg)
+        attrs = rules.get(path)
+        shown = quote_path(os.fsencode(arg))
+        if show_all:
+            for name in rules.order:
+                if name in attrs:
+                    lines.append(shown + b": " + name.encode() + b": " + _attr_value(attrs[name]) + b"\n")
+            continue
+        for name in names:
+            v = attrs.get(name, None)
+            lines.append(shown + b": " + name.encode() + b": " +
+                         (b"unspecified" if v is None else _attr_value(v)) + b"\n")
+    out(b"".join(lines))
+    return 0
+
+
+def _attr_value(v) -> bytes:
+    if v is True:
+        return b"set"
+    if v is False:
+        return b"unset"
+    return str(v).encode()
+
+
 # -- add / rm -----------------------------------------------------------------------
 
 @command("add")

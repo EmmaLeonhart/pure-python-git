@@ -35,7 +35,7 @@ def _worktree_map(repo, idx: Index, paths: set[bytes], contents: diffout.Content
     changed ones are hashed (without writing objects)."""
     filemode = repo.config.get_bool("core.fileMode", os.name != "nt")
     out_map = {}
-    for path in paths:
+    for path in sorted(paths):  # path order, so warnings come out as git's do
         st = worktree.lstat(repo, path)
         if st is None:
             continue
@@ -51,7 +51,8 @@ def _worktree_map(repo, idx: Index, paths: set[bytes], contents: diffout.Content
         if e is not None and not worktree.is_modified(repo, e, st):
             out_map[path] = (mode, e.oid)
             continue
-        data = worktree.read_worktree_blob(repo, path, st)
+        # diff reads work-tree files with core.safecrlf warnings on, as git does.
+        data = worktree.read_worktree_blob(repo, path, st, e.oid if e else None, warn=True)
         oid = hash_bytes(b"blob", data)
         contents.extra[oid] = data
         out_map[path] = (mode, oid)

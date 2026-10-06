@@ -148,3 +148,14 @@ milestones.
   paths that differ from every parent. 181 random conflicted merges were
   identical to git in `diff` and in `show` of the committed result; 40
   are kept in `tests/test_stage4_merge.py`. 97 tests pass.
+- 07:17 PST: **line endings.** `pygit/attributes.py` reads
+  `.gitattributes` with git's precedence and macros (new `check-attr`
+  command); `pygit/convert.py` ports convert.c's CRLF rules (attribute and
+  config actions, text detection for `auto`, the index-has-CR rule,
+  safecrlf warnings, native CRLF on Windows builds). The clean direction
+  runs wherever a work-tree file is hashed (add, status, diff, commit -a,
+  update-index), with warnings on `add` and `diff` as git prints them; the
+  smudge direction runs in every work-tree write (checkout, reset, merge,
+  clone). `tests/test_eol.py` compares attributes, stored blobs, status,
+  diff and checkout bytes with git for autocrlf false/true/input and
+  core.eol=crlf. 101 tests pass.
