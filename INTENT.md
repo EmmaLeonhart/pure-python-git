@@ -81,6 +81,11 @@ each stage, and adjust the plan (saying why) if a stage turns out different.
   cherry-pick tests run. Unblock: the user says memory is free, then rerun
   `python -m unittest discover -s tests`.
 
+- 2026-10-06 11:22 PST: since 08:36, `rebase`, `revert`, rebase's
+  patch-id skipping, `stash -u` and `-m` for cherry-pick/revert. What is
+  left in todo.md (interactive rebase, pack fidelity) is far from
+  ordinary use. Still no message from the user.
+
 ## Open questions
 
 - None blocking. Exact CLI coverage per command (which flags) is decided as

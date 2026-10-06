@@ -55,7 +55,8 @@ def _subject(c: Commit) -> str:
     return split_message(c.message)[0].decode("utf-8", "replace")
 
 
-def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = False):
+def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = False,
+                 mainline: int | None = None):
     """Merge one commit's changes onto HEAD (base: its parent) into the
     index and work tree, printing the merge messages; `reverse` undoes the
     commit instead (base: the commit, target: its parent). Returns (merge
@@ -68,8 +69,11 @@ def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = Fa
     refs = Refs(repo)
     head, _ = refs.resolve("HEAD")
     c = Commit.parse(repo.odb.read(oid)[1])
-    if len(c.parents) > 1:
+    if len(c.parents) > 1 and mainline is None:
         raise Fatal(f"error: commit {oid} is a merge but no -m option was given.\n")
+    if mainline is not None and mainline > max(len(c.parents), 1):
+        raise Fatal(f"error: commit {oid} does not have parent {mainline}\n")
+    base_parent = c.parents[(mainline or 1) - 1] if c.parents else None
     idx = Index.read(repo)
     head_map = head_tree_entries(repo)
     index_map = {e.path: (e.mode, e.oid) for e in idx.sorted_entries()}
@@ -78,7 +82,7 @@ def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = Fa
                     "hint: commit your changes or stash them to proceed.\n")
     short = revparse.short_id(repo, oid)
     subject = _subject(c)
-    parent_tree = Commit.parse(repo.odb.read(c.parents[0])[1]).tree if c.parents else None
+    parent_tree = Commit.parse(repo.odb.read(base_parent)[1]).tree if base_parent else None
     head_tree = Commit.parse(repo.odb.read(head)[1]).tree if head else None
     this_label, parent_label = f"{short} ({subject})", f"parent of {short} ({subject})"
     if reverse:
@@ -96,11 +100,12 @@ def apply_commit(repo, oid: str, action: str = "cherry-pick", reverse: bool = Fa
     return res, applied, c, short, subject, head_tree
 
 
-def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -> int:
+def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False,
+         mainline: int | None = None) -> int:
     """Apply one commit on top of HEAD. Returns 0 (picked), 1 (stopped:
     conflict or empty), raising Fatal when nothing was done."""
     head, _ = Refs(repo).resolve("HEAD")
-    res, applied, c, short, subject, head_tree = apply_commit(repo, oid)
+    res, applied, c, short, subject, head_tree = apply_commit(repo, oid, mainline=mainline)
     message = c.message
     if record_origin:
         message = message.rstrip(b"\n") + b"\n\n(cherry picked from commit " + oid.encode() + b")\n"
@@ -138,12 +143,26 @@ def pick(repo, oid: str, record_origin: bool = False, no_commit: bool = False) -
 REVERT_HINT = CONFLICT_HINT.replace("cherry-pick", "revert")
 
 
-def revert_one(repo, oid: str, no_commit: bool = False) -> int:
+def revert_message(subject: str, oid: str, c: Commit, mainline: int | None) -> bytes:
+    """git's revert message: 'Revert "X"' (or 'Reapply "X"' when X is
+    itself a revert), naming the mainline parent for merges."""
+    if subject.startswith('Revert "') and not subject[len('Revert "'):].startswith('Revert "'):
+        head = 'Reapply "' + subject[len('Revert "'):]
+    else:
+        head = f'Revert "{subject}"'
+    body = f"This reverts commit {oid}"
+    if len(c.parents) > 1:
+        body += f", reversing\nchanges made to {c.parents[(mainline or 1) - 1]}"
+    return f"{head}\n\n{body}.\n".encode()
+
+
+def revert_one(repo, oid: str, no_commit: bool = False, mainline: int | None = None) -> int:
     """Undo one commit on top of HEAD (git revert). Same returns as pick."""
     from pygit.ident import ident
     head, _ = Refs(repo).resolve("HEAD")
-    res, applied, c, short, subject, head_tree = apply_commit(repo, oid, "revert", reverse=True)
-    message = f'Revert "{subject}"\n\nThis reverts commit {oid}.\n'.encode()
+    res, applied, c, short, subject, head_tree = apply_commit(repo, oid, "revert", reverse=True,
+                                                              mainline=mainline)
+    message = revert_message(subject, oid, c, mainline)
     if not res.clean:
         conflicts = sorted({p for p, s in res.entries if s})
         if not no_commit:
@@ -217,13 +236,13 @@ def _save_sequencer(repo, orig_head: str, remaining: list[tuple[str, str]]) -> N
 
 
 def run_todo(repo, items: list[tuple[str, str]], record_origin: bool, no_commit: bool,
-             orig_head: str | None, name: str) -> int:
+             orig_head: str | None, name: str, mainline: int | None = None) -> int:
     for i, (op, oid) in enumerate(items):
         try:
             if op == "revert":
-                rc = revert_one(repo, oid, no_commit)
+                rc = revert_one(repo, oid, no_commit, mainline)
             else:
-                rc = pick(repo, oid, record_origin, no_commit)
+                rc = pick(repo, oid, record_origin, no_commit, mainline)
         except Fatal as e:
             err(str(e) + f"fatal: {name} failed\n")
             return 128
@@ -248,9 +267,17 @@ def _sequencer_command(args, op: str) -> int:
         raise GitError("this operation must be run in a work tree")
     record_origin = no_commit = False
     action = None
+    mainline = None
     revs = []
-    for arg in args:
-        if arg == "-x" and op == "pick":
+    it = iter(args)
+    for arg in it:
+        if arg in ("-m", "--mainline"):
+            mainline = int(next(it))
+        elif arg.startswith("--mainline="):
+            mainline = int(arg.split("=", 1)[1])
+        elif arg.startswith("-m") and arg[2:].isdigit():
+            mainline = int(arg[2:])
+        elif arg == "-x" and op == "pick":
             record_origin = True
         elif arg in ("-n", "--no-commit"):
             no_commit = True
@@ -300,7 +327,12 @@ def _sequencer_command(args, op: str) -> int:
                 rc = continue_commit(repo)
                 if rc:
                     return rc
-        return run_todo(repo, todo, record_origin, no_commit, orig, name)
+        opts = repo.gitdir / "sequencer" / "opts"
+        if mainline is None and opts.is_file():
+            from pygit import config as configmod
+            v = configmod.Config([opts]).get("options.mainline")
+            mainline = int(v) if v else None
+        return run_todo(repo, todo, record_origin, no_commit, orig, name, mainline)
     if Index.read(repo).has_conflicts():
         verb = "Cherry-picking" if op == "pick" else "Reverting"
         err(f"error: {verb} is not possible because you have unmerged files.\n"
@@ -324,7 +356,11 @@ def _sequencer_command(args, op: str) -> int:
     head, _ = refs.resolve("HEAD")
     if head:
         _write(repo, "ORIG_HEAD", (head + "\n").encode())
-    return run_todo(repo, items, record_origin, no_commit, head, name)
+    rc = run_todo(repo, items, record_origin, no_commit, head, name, mainline)
+    if rc and mainline is not None and (repo.gitdir / "sequencer").is_dir():
+        # Remembered for --continue, in git's sequencer/opts format.
+        _write(repo, "sequencer/opts", f"[options]\n\tmainline = {mainline}\n".encode())
+    return rc
 
 
 @command("cherry-pick")

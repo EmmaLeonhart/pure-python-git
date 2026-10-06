@@ -179,7 +179,7 @@ an approximation; random tests compare the results with git.
   `--autosquash`, `--exec`, `--reapply-cherry-picks`) and never opens an
   editor; `stash` has no `-a`/`--all`, `--keep-index`, `--patch` or
   `branch`; and
-  `cherry-pick` and `revert` have no `-m` (merges) or `--edit`.
+  `cherry-pick` and `revert` have no `--edit`.
 - `merge` merges one branch at a time (no octopus) with the ort strategy
   only and no `-X` options. Unusual conflicts (distinct types,
   rename/rename(2to1), directory renames) are reported but not resolved

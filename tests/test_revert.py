@@ -54,6 +54,29 @@ class TestRevert(Stage3Twin):
         self.step("commit", "--no-edit")
         self.step("log", "--format=%B", "-1")
 
+    def test_mainline(self):
+        self.write2("k", "k\n")
+        self.git2("add", ".")
+        self.git2("commit", "-q", "-m", "base")
+        self.git2("checkout", "-q", "-b", "side")
+        self.write2("s", "s\n")
+        self.git2("add", "s")
+        self.git2("commit", "-q", "-m", "side s")
+        self.git2("checkout", "-q", "main")
+        self.write2("m", "m\n")
+        self.git2("add", "m")
+        self.git2("commit", "-q", "-m", "main m")
+        self.git2("merge", "-q", "--no-edit", "side")
+        self.step("revert", "HEAD")              # a merge without -m
+        self.step("revert", "-m", "3", "HEAD")    # no such parent
+        self.step("revert", "-m", "1", "HEAD")
+        self.step("log", "--format=%B", "-1")
+        self.step("revert", "-m", "1", "HEAD")    # reverting a revert: "Reapply"
+        self.step("log", "--format=%B", "-1")
+        self.git2("checkout", "-q", "-b", "other", "main~3")
+        self.step("cherry-pick", "-m", "1", "main~2")
+        self.step("cherry-pick", "-m2", "main~2")
+
     def test_sequence(self):
         self.setup_history()
         self.step("revert", "HEAD", "HEAD~1")

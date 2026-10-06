@@ -222,3 +222,9 @@ milestones.
   the way (entry kept), and prints merge-ort's "Already up to date." when
   the stash changed no tracked file. Stash commit ids still match git's.
   Stash tests (4) pass; the full suite still waits on memory.
+- 11:22 PST: **`cherry-pick -m` / `revert -m`** (mainline parent as base;
+  `-m 1` also accepted on a non-merge, as current git does; "does not
+  have parent N"; kept in `sequencer/opts` for `--continue`). Revert
+  messages follow git: "reversing changes made to <parent>" for merges,
+  and `Reapply "X"` when reverting `Revert "X"`. Revert (4) and
+  cherry-pick (5) tests pass; the full suite still waits on memory.
